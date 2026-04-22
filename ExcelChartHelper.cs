@@ -121,7 +121,6 @@ namespace DailyReportTool
             return $"'{sheetName}'!${colLetter}${startRow + 1}:${colLetter}${endRow + 1}";
         }
 
-
         public static void CreateCapacityBalanceChart(ISheet sheet, string dataSheetName, int dataCount, string chartTitle, double yMax)
         {
             if (dataCount == 0) return;
@@ -168,7 +167,7 @@ namespace DailyReportTool
                 CT_ValAx valAx = new CT_ValAx { axId = new CT_UnsignedInt { val = valId } };
                 valAx.scaling = new CT_Scaling();
                 valAx.scaling.orientation = new CT_Orientation { val = ST_Orientation.minMax };
-                valAx.scaling.min = new CT_Double { val = 0.0 };
+                valAx.scaling.min = new CT_Double { val = 0.000000000001 };
                 valAx.scaling.max = new CT_Double { val = yMax };
                 valAx.delete = new CT_Boolean { val = 0 };
                 valAx.axPos = new CT_AxPos { val = ST_AxPos.l };
@@ -186,9 +185,9 @@ namespace DailyReportTool
                 bc.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = catId }, new CT_UnsignedInt { val = valId } };
                 
                 string cR = $"'{dataSheetName}'!$B$21:${GetExcelColumnName(dataCount + 1)}$21";
-                AddSer_Bar(bc, 0, "有效產能", cR, $"'{dataSheetName}'!$B$23:${GetExcelColumnName(dataCount + 1)}$23", "C0C0C0");
-                AddSer_Bar(bc, 1, "產速損失", cR, $"'{dataSheetName}'!$B$25:${GetExcelColumnName(dataCount + 1)}$25", "FFFF00");
-                AddSer_Bar(bc, 2, "機故損失", cR, $"'{dataSheetName}'!$B$24:${GetExcelColumnName(dataCount + 1)}$24", "FF0000");
+                AddSer_Bar(bc, 0, "設備產能", cR, $"'{dataSheetName}'!$B$23:${GetExcelColumnName(dataCount + 1)}$23", "C0C0C0", true, "000000");
+                AddSer_Bar(bc, 1, "產速損失", cR, $"'{dataSheetName}'!$B$25:${GetExcelColumnName(dataCount + 1)}$25", "FFFF00", false, "000000");
+                AddSer_Bar(bc, 2, "機故損失", cR, $"'{dataSheetName}'!$B$24:${GetExcelColumnName(dataCount + 1)}$24", "FF0000", false, "FF0000");
                 ctPlotArea.barChart.Add(bc);
 
                 // 4. Line Chart
@@ -205,7 +204,7 @@ namespace DailyReportTool
             }
         }
 
-        private static void AddSer_Bar(CT_BarChart bc, int idx, string name, string catF, string valF, string rgb)
+        private static void AddSer_Bar(CT_BarChart bc, int idx, string name, string catF, string valF, string rgb, bool showLbl, string lblColor)
         {
             CT_BarSer s = bc.AddNewSer();
             s.idx = new CT_UnsignedInt { val = (uint)idx };
@@ -216,7 +215,35 @@ namespace DailyReportTool
             s.spPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_ShapeProperties { 
                 solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = HexToBytes(rgb) } } 
             };
-            s.dLbls = new CT_DLbls { showVal = new CT_Boolean { val = 1 } };
+            
+            if (showLbl) {
+                s.dLbls = new CT_DLbls { 
+                    showVal = new CT_Boolean { val = 1 },
+                    showCatName = new CT_Boolean { val = 0 },
+                    showSerName = new CT_Boolean { val = 0 },
+                    showPercent = new CT_Boolean { val = 0 },
+                    showLegendKey = new CT_Boolean { val = 0 }
+                };
+                
+                s.dLbls.txPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_TextBody {
+                    bodyPr = new NPOI.OpenXmlFormats.Dml.CT_TextBodyProperties(),
+                    lstStyle = new NPOI.OpenXmlFormats.Dml.CT_TextListStyle(),
+                    p = new List<NPOI.OpenXmlFormats.Dml.CT_TextParagraph> {
+                        new NPOI.OpenXmlFormats.Dml.CT_TextParagraph {
+                            pPr = new NPOI.OpenXmlFormats.Dml.CT_TextParagraphProperties {
+                                defRPr = new NPOI.OpenXmlFormats.Dml.CT_TextCharacterProperties {
+                                    sz = 1000, // 10 pt
+                                    solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = HexToBytes(lblColor) } },
+                                    latin = new CT_TextFont { typeface = "Arial" }
+                                }
+                            }
+                        }
+                    }
+                };
+            } else {
+                // 徹底不建立標籤物件，確保隱藏
+                s.dLbls = null;
+            }
         }
 
         private static void AddSer_Line(CT_LineChart lc, int idx, string name, string catF, string valF, string rgb, bool isDash)

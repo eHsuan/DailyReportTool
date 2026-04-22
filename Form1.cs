@@ -56,7 +56,21 @@ namespace DailyReportTool
         private void menuPareto_Click(object sender, EventArgs e) { pnlPareto.Visible = true; pnlBalance.Visible = false; }
         private void menuBalance_Click(object sender, EventArgs e) { pnlPareto.Visible = false; pnlBalance.Visible = true; }
 
-        // --- Pareto Logic (User-Fixed Version Kept Intact) ---
+        // --- Shared Helpers ---
+        private bool IsBinaryExcel(string path) {
+            try {
+                byte[] header = new byte[4];
+                using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                    fs.Read(header, 0, 4);
+                }
+                return (header[0] == 0xD0 && header[1] == 0xCF && header[2] == 0x11 && header[3] == 0xE0) || 
+                       (header[0] == 0x50 && header[1] == 0x4B && header[2] == 0x03 && header[3] == 0x04);
+            } catch { return false; }
+        }
+
+        private string GetCellValue(ICell c) { if (c == null) return ""; if (c.CellType == CellType.String) return c.StringCellValue; return c.ToString().Trim(); }
+
+        // --- Pareto Logic ---
         private void btnSelectMaintenance_Click(object sender, EventArgs e) {
             using (OpenFileDialog ofd = new OpenFileDialog { Filter = "Excel/HTML|*.xlsx;*.xls;*.html" })
                 if (ofd.ShowDialog() == DialogResult.OK) { txtMaintenancePath.Text = ofd.FileName; Log("Selected Record: " + ofd.FileName); }
@@ -83,10 +97,8 @@ namespace DailyReportTool
         }
 
         private void ProcessFile(string path, Dictionary<string, double> hours, bool isMaintenance) {
-            bool isHtml = false;
-            using (StreamReader sr = new StreamReader(path)) { string head = sr.ReadLine()?.ToLower(); if (head != null && (head.Contains("<html") || head.Contains("<table"))) isHtml = true; }
-            if (isHtml) {
-                HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument(); doc.Load(path, Encoding.UTF8);
+            if (!IsBinaryExcel(path)) {
+                HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument(); doc.Load(path, true);
                 var trs = doc.DocumentNode.SelectNodes("//tr"); if (trs == null) return;
                 foreach (var tr in trs.Skip(1)) {
                     var tds = tr.SelectNodes("td|th"); if (tds == null || tds.Count < 10) continue;
@@ -141,10 +153,10 @@ namespace DailyReportTool
             }
         }
 
-        // --- NEW Independent Logic for Capacity Balance ---
+        // --- Capacity Balance Logic ---
         private class Balance_DataRow {
             public string Name, Category;
-            public double TargetPcsPerDay, TheoreticalPcsPerDay, EquipCount, WeightedAvgCT, WeightedAvgPass;
+            public double TargetPcsPerDay, TheoreticalPcsPerDay, BreakdownPcsPerDay, EquipCount, WeightedAvgCT, WeightedAvgPass;
             public List<Balance_ProductInfo> Products = new List<Balance_ProductInfo>();
         }
         private class Balance_ProductInfo { public double CT, PcsPerLot, DailyLotDemand, PassCount; }
@@ -154,20 +166,35 @@ namespace DailyReportTool
                 if (ofd.ShowDialog() == DialogResult.OK) { txtIEPath.Text = ofd.FileName; Log("Selected IE: " + ofd.FileName); }
         }
 
+        private void btnBalanceSelectMaintenance_Click(object sender, EventArgs e) {
+            using (OpenFileDialog ofd = new OpenFileDialog { Filter = "Excel/HTML|*.xlsx;*.xls;*.html" })
+                if (ofd.ShowDialog() == DialogResult.OK) { txtBalanceMaintenancePath.Text = ofd.FileName; Log("Balance Record: " + ofd.FileName); }
+        }
+
+        private void btnBalanceSelectConnection_Click(object sender, EventArgs e) {
+            using (OpenFileDialog ofd = new OpenFileDialog { Filter = "Excel|*.xlsx;*.xls" })
+                if (ofd.ShowDialog() == DialogResult.OK) { txtBalanceConnectionPath.Text = ofd.FileName; Log("KPI File: " + ofd.FileName); }
+        }
+
         private void btnGenerateBalance_Click(object sender, EventArgs e) {
             if (string.IsNullOrEmpty(txtIEPath.Text)) return;
             try {
                 using (SaveFileDialog sfd = new SaveFileDialog { Filter = "Excel|*.xlsx", FileName = $"BalanceReport_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx" }) {
                     if (sfd.ShowDialog() != DialogResult.OK) return;
+
+                    Dictionary<string, double> equipHours = new Dictionary<string, double>();
+                    if (!string.IsNullOrEmpty(txtBalanceMaintenancePath.Text)) ProcessFile(txtBalanceMaintenancePath.Text, equipHours, true);
+
+                    Dictionary<string, double> equipKPI = new Dictionary<string, double>();
+                    if (!string.IsNullOrEmpty(txtBalanceConnectionPath.Text)) ProcessKPIFile(txtBalanceConnectionPath.Text, equipKPI);
+
                     IWorkbook wb = new XSSFWorkbook();
                     List<Balance_DataRow> data = Balance_ReadIEData(txtIEPath.Text);
-                    Balance_PerformCalculations(data, (double)numDailyHours.Value);
+                    Balance_PerformCalculations(data, (double)numDailyHours.Value, (int)numDataDays.Value, equipHours, equipKPI);
 
-                    // 1. Data Sheet (Like Pareto's data source)
                     ISheet sData = wb.CreateSheet("平衡圖數據");
                     Balance_RenderData(sData, data, (int)numDataDays.Value);
 
-                    // 2. Chart Sheet (Pure Chart)
                     ISheet sChart = wb.CreateSheet("產能平衡圖");
                     ExcelChartHelper.CreateCapacityBalanceChart(sChart, sData.SheetName, data.Count, "產能平衡圖", 
                         data.Max(r => Math.Max(r.TargetPcsPerDay, r.TheoreticalPcsPerDay)) * (int)numDataDays.Value * 1.1);
@@ -175,7 +202,37 @@ namespace DailyReportTool
                     using (FileStream fs = new FileStream(sfd.FileName, FileMode.Create)) { wb.Write(fs); }
                     Log("Balance Success!"); MessageBox.Show("Generated Successfully!");
                 }
-            } catch (Exception ex) { MessageBox.Show("Balance Error: " + ex.Message); }
+            } catch (Exception ex) { Log("Balance Error: " + ex.Message); MessageBox.Show("Balance Error: " + ex.Message); }
+        }
+
+        private void ProcessKPIFile(string path, Dictionary<string, double> kpiMap) {
+            if (!IsBinaryExcel(path)) {
+                HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument(); doc.Load(path, true);
+                var trs = doc.DocumentNode.SelectNodes("//tr"); if (trs == null) return;
+                // 從第 2 列 (Index 1) 開始往下 (因為第一行是 Header)
+                foreach (var tr in trs.Skip(1)) {
+                    var tds = tr.SelectNodes("td|th"); if (tds == null || tds.Count < 12) continue;
+                    string id = System.Net.WebUtility.HtmlDecode(tds[0].InnerText).Trim();
+                    if (string.IsNullOrEmpty(id)) continue;
+                    string valStr = tds[11].InnerText.Replace("%", "").Replace(",", "").Trim();
+                    if (double.TryParse(valStr, out double d)) { kpiMap[id] = d / 100.0; } // 假設 KPI 欄位是百分比數值 (如 0.14 代表 0.14%)
+                }
+            } else {
+                using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
+                    IWorkbook wb = WorkbookFactory.Create(fs); ISheet ws = wb.GetSheetAt(0);
+                    for (int i = 2; i <= ws.LastRowNum; i++) {
+                        IRow r = ws.GetRow(i); if (r == null) continue;
+                        string id = GetCellValue(r.GetCell(0)).Trim();
+                        if (string.IsNullOrEmpty(id)) continue;
+                        double val = 0; ICell cL = r.GetCell(11);
+                        if (cL != null) {
+                            if (cL.CellType == CellType.Numeric) val = cL.NumericCellValue;
+                            else if (double.TryParse(cL.ToString().Replace("%", "").Replace(",", ""), out double d)) { val = d / 100.0; }
+                        }
+                        kpiMap[id] = val;
+                    }
+                }
+            }
         }
 
         private List<Balance_DataRow> Balance_ReadIEData(string p) {
@@ -197,24 +254,47 @@ namespace DailyReportTool
             return rows;
         }
 
-        private void Balance_PerformCalculations(List<Balance_DataRow> rows, double hr) {
+        private void Balance_PerformCalculations(List<Balance_DataRow> rows, double hr, int days, Dictionary<string, double> equipHours, Dictionary<string, double> equipKPI) {
+            double totalProduceTimeHours = hr * days;
             foreach (var r in rows) {
                 double tP = 0, tB = 0, wCT = 0, wP = 0;
                 foreach (var p in r.Products) { double b = p.DailyLotDemand * p.PcsPerLot; tB += b; tP += (b * p.PassCount); wCT += (p.CT * b * p.PassCount); wP += (p.PassCount * b); }
                 r.WeightedAvgCT = (tP > 0) ? (wCT / tP) : 0; r.WeightedAvgPass = (tB > 0) ? (wP / tB) : 1;
+                
                 double theory = (r.EquipCount * hr * 3600) / (r.WeightedAvgCT > 0 ? r.WeightedAvgCT : 1);
                 r.TheoreticalPcsPerDay = theory / (r.WeightedAvgPass > 0 ? r.WeightedAvgPass : 1);
+
+                if (processMap.ContainsKey(r.Name)) {
+                    double siteTotalBreakdownPcs = 0;
+                    foreach (var eqId in processMap[r.Name]) {
+                        double maintenanceRatio = 0;
+                        if (equipHours.ContainsKey(eqId) && totalProduceTimeHours > 0) 
+                            maintenanceRatio = equipHours[eqId] / totalProduceTimeHours;
+                        
+                        double kpiRatio = equipKPI.ContainsKey(eqId) ? equipKPI[eqId] : 0;
+                        double finalRatio = Math.Max(maintenanceRatio, kpiRatio);
+                        
+                        double eqTheoreticalPcsPerDay = r.TheoreticalPcsPerDay / (r.EquipCount > 0 ? r.EquipCount : 1);
+                        siteTotalBreakdownPcs += (finalRatio * eqTheoreticalPcsPerDay);
+                    }
+                    r.BreakdownPcsPerDay = siteTotalBreakdownPcs;
+                }
             }
         }
 
         private void Balance_RenderData(ISheet s, List<Balance_DataRow> rows, int d) {
-            string[] heads = { "機台/站別", "目標片次", "有效產能", "機故損失", "產速損失" };
+            string[] heads = { "機台/站別", "目標片次", "設備產能", "機故損失", "產速損失" };
             for (int j = 0; j < 5; j++) s.CreateRow(20 + j).CreateCell(0).SetCellValue(heads[j]);
+            
+            double maxTarget = rows.Count > 0 ? rows.Max(r => r.TargetPcsPerDay * d) : 0;
+            long roundedMaxTarget = (long)Math.Round(maxTarget);
+
             for (int i = 0; i < rows.Count; i++) {
                 int c = i + 1; s.GetRow(20).CreateCell(c).SetCellValue(rows[i].Name);
-                s.GetRow(21).CreateCell(c).SetCellValue(rows[i].TargetPcsPerDay * d);
-                s.GetRow(22).CreateCell(c).SetCellValue(rows[i].TheoreticalPcsPerDay * d);
-                s.GetRow(23).CreateCell(c).SetCellValue(0); s.GetRow(24).CreateCell(c).SetCellValue(0);
+                s.GetRow(21).CreateCell(c).SetCellValue(roundedMaxTarget);
+                s.GetRow(22).CreateCell(c).SetCellValue(Math.Round(rows[i].TheoreticalPcsPerDay * d));
+                s.GetRow(23).CreateCell(c).SetCellValue(Math.Round(rows[i].BreakdownPcsPerDay * d));
+                s.GetRow(24).CreateCell(c).SetCellValue(0);
             }
         }
 
@@ -225,14 +305,12 @@ namespace DailyReportTool
             try {
                 if (c.CellType == CellType.Formula) {
                     try { CellValue v = e.Evaluate(c); return (v != null) ? v.NumberValue : 0; }
-                    catch { return c.NumericCellValue; } // Use cache if evaluation fails
+                    catch { return c.NumericCellValue; }
                 }
                 if (c.CellType == CellType.Numeric) return c.NumericCellValue;
-                if (double.TryParse(c.ToString(), out double d)) return d;
+                if (double.TryParse(c.ToString().Replace("%", "").Replace(",", ""), out double d)) return d / (c.ToString().Contains("%") ? 100.0 : 1.0);
             } catch { }
             return 0;
         }
-
-        private string GetCellValue(ICell c) { if (c == null) return ""; if (c.CellType == CellType.String) return c.StringCellValue; return c.ToString().Trim(); }
     }
 }

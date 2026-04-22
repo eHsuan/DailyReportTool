@@ -41,6 +41,12 @@ namespace DailyReportTool
             this.btnGenerate = new System.Windows.Forms.Button();
             this.btnClear = new System.Windows.Forms.Button();
             this.pnlBalance = new System.Windows.Forms.Panel();
+            this.labelBalanceM = new System.Windows.Forms.Label();
+            this.txtBalanceMaintenancePath = new System.Windows.Forms.TextBox();
+            this.btnBalanceSelectMaintenance = new System.Windows.Forms.Button();
+            this.labelBalanceC = new System.Windows.Forms.Label();
+            this.txtBalanceConnectionPath = new System.Windows.Forms.TextBox();
+            this.btnBalanceSelectConnection = new System.Windows.Forms.Button();
             this.lblDailyHours = new System.Windows.Forms.Label();
             this.numDailyHours = new System.Windows.Forms.NumericUpDown();
             this.lblDataDays = new System.Windows.Forms.Label();
@@ -173,6 +179,12 @@ namespace DailyReportTool
             // 
             // pnlBalance
             // 
+            this.pnlBalance.Controls.Add(this.labelBalanceM);
+            this.pnlBalance.Controls.Add(this.txtBalanceMaintenancePath);
+            this.pnlBalance.Controls.Add(this.btnBalanceSelectMaintenance);
+            this.pnlBalance.Controls.Add(this.labelBalanceC);
+            this.pnlBalance.Controls.Add(this.txtBalanceConnectionPath);
+            this.pnlBalance.Controls.Add(this.btnBalanceSelectConnection);
             this.pnlBalance.Controls.Add(this.lblDailyHours);
             this.pnlBalance.Controls.Add(this.numDailyHours);
             this.pnlBalance.Controls.Add(this.lblDataDays);
@@ -183,14 +195,68 @@ namespace DailyReportTool
             this.pnlBalance.Controls.Add(this.txtIEPath);
             this.pnlBalance.Location = new System.Drawing.Point(0, 27);
             this.pnlBalance.Name = "pnlBalance";
-            this.pnlBalance.Size = new System.Drawing.Size(600, 115);
+            this.pnlBalance.Size = new System.Drawing.Size(600, 185);
             this.pnlBalance.TabIndex = 2;
             this.pnlBalance.Visible = false;
+            // 
+            // labelBalanceM
+            // 
+            this.labelBalanceM.AutoSize = true;
+            this.labelBalanceM.Location = new System.Drawing.Point(12, 50);
+            this.labelBalanceM.Name = "labelBalanceM";
+            this.labelBalanceM.Size = new System.Drawing.Size(77, 12);
+            this.labelBalanceM.TabIndex = 8;
+            this.labelBalanceM.Text = "維修保養紀錄";
+            // 
+            // txtBalanceMaintenancePath
+            // 
+            this.txtBalanceMaintenancePath.Location = new System.Drawing.Point(95, 47);
+            this.txtBalanceMaintenancePath.Name = "txtBalanceMaintenancePath";
+            this.txtBalanceMaintenancePath.ReadOnly = true;
+            this.txtBalanceMaintenancePath.Size = new System.Drawing.Size(400, 22);
+            this.txtBalanceMaintenancePath.TabIndex = 9;
+            // 
+            // btnBalanceSelectMaintenance
+            // 
+            this.btnBalanceSelectMaintenance.Location = new System.Drawing.Point(501, 45);
+            this.btnBalanceSelectMaintenance.Name = "btnBalanceSelectMaintenance";
+            this.btnBalanceSelectMaintenance.Size = new System.Drawing.Size(75, 23);
+            this.btnBalanceSelectMaintenance.TabIndex = 10;
+            this.btnBalanceSelectMaintenance.Text = "選擇檔案";
+            this.btnBalanceSelectMaintenance.UseVisualStyleBackColor = true;
+            this.btnBalanceSelectMaintenance.Click += new System.EventHandler(this.btnBalanceSelectMaintenance_Click);
+            // 
+            // labelBalanceC
+            // 
+            this.labelBalanceC.AutoSize = true;
+            this.labelBalanceC.Location = new System.Drawing.Point(12, 85);
+            this.labelBalanceC.Name = "labelBalanceC";
+            this.labelBalanceC.Size = new System.Drawing.Size(77, 12);
+            this.labelBalanceC.TabIndex = 11;
+            this.labelBalanceC.Text = "KPI 資料檔案";
+            // 
+            // txtBalanceConnectionPath
+            // 
+            this.txtBalanceConnectionPath.Location = new System.Drawing.Point(95, 82);
+            this.txtBalanceConnectionPath.Name = "txtBalanceConnectionPath";
+            this.txtBalanceConnectionPath.ReadOnly = true;
+            this.txtBalanceConnectionPath.Size = new System.Drawing.Size(400, 22);
+            this.txtBalanceConnectionPath.TabIndex = 12;
+            // 
+            // btnBalanceSelectConnection
+            // 
+            this.btnBalanceSelectConnection.Location = new System.Drawing.Point(501, 80);
+            this.btnBalanceSelectConnection.Name = "btnBalanceSelectConnection";
+            this.btnBalanceSelectConnection.Size = new System.Drawing.Size(75, 23);
+            this.btnBalanceSelectConnection.TabIndex = 13;
+            this.btnBalanceSelectConnection.Text = "選擇檔案";
+            this.btnBalanceSelectConnection.UseVisualStyleBackColor = true;
+            this.btnBalanceSelectConnection.Click += new System.EventHandler(this.btnBalanceSelectConnection_Click);
             // 
             // lblDailyHours
             // 
             this.lblDailyHours.AutoSize = true;
-            this.lblDailyHours.Location = new System.Drawing.Point(180, 50);
+            this.lblDailyHours.Location = new System.Drawing.Point(180, 120);
             this.lblDailyHours.Name = "lblDailyHours";
             this.lblDailyHours.Size = new System.Drawing.Size(77, 12);
             this.lblDailyHours.TabIndex = 7;
@@ -198,7 +264,7 @@ namespace DailyReportTool
             // 
             // numDailyHours
             // 
-            this.numDailyHours.Location = new System.Drawing.Point(265, 47);
+            this.numDailyHours.Location = new System.Drawing.Point(265, 117);
             this.numDailyHours.Maximum = new decimal(new int[] {
             24,
             0,
@@ -221,15 +287,15 @@ namespace DailyReportTool
             // lblDataDays
             // 
             this.lblDataDays.AutoSize = true;
-            this.lblDataDays.Location = new System.Drawing.Point(12, 50);
+            this.lblDataDays.Location = new System.Drawing.Point(12, 120);
             this.lblDataDays.Name = "lblDataDays";
             this.lblDataDays.Size = new System.Drawing.Size(53, 12);
-            this.lblDailyHours.TabIndex = 5;
+            this.lblDataDays.TabIndex = 5;
             this.lblDataDays.Text = "資料天數";
             // 
             // numDataDays
             // 
-            this.numDataDays.Location = new System.Drawing.Point(95, 47);
+            this.numDataDays.Location = new System.Drawing.Point(95, 117);
             this.numDataDays.Minimum = new decimal(new int[] {
             1,
             0,
@@ -256,7 +322,7 @@ namespace DailyReportTool
             // 
             // btnGenerateBalance
             // 
-            this.btnGenerateBalance.Location = new System.Drawing.Point(95, 85);
+            this.btnGenerateBalance.Location = new System.Drawing.Point(95, 150);
             this.btnGenerateBalance.Name = "btnGenerateBalance";
             this.btnGenerateBalance.Size = new System.Drawing.Size(120, 30);
             this.btnGenerateBalance.TabIndex = 2;
@@ -283,19 +349,19 @@ namespace DailyReportTool
             // 
             // txtLog
             // 
-            this.txtLog.Location = new System.Drawing.Point(12, 147);
+            this.txtLog.Location = new System.Drawing.Point(12, 220);
             this.txtLog.Multiline = true;
             this.txtLog.Name = "txtLog";
             this.txtLog.ReadOnly = true;
             this.txtLog.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.txtLog.Size = new System.Drawing.Size(576, 201);
+            this.txtLog.Size = new System.Drawing.Size(576, 180);
             this.txtLog.TabIndex = 3;
             // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(600, 360);
+            this.ClientSize = new System.Drawing.Size(600, 420);
             this.Controls.Add(this.pnlPareto);
             this.Controls.Add(this.pnlBalance);
             this.Controls.Add(this.txtLog);
@@ -340,5 +406,11 @@ namespace DailyReportTool
         private System.Windows.Forms.Label lblDailyHours;
         private System.Windows.Forms.NumericUpDown numDailyHours;
         private System.Windows.Forms.TextBox txtLog;
+        private System.Windows.Forms.Label labelBalanceM;
+        private System.Windows.Forms.TextBox txtBalanceMaintenancePath;
+        private System.Windows.Forms.Button btnBalanceSelectMaintenance;
+        private System.Windows.Forms.Label labelBalanceC;
+        private System.Windows.Forms.TextBox txtBalanceConnectionPath;
+        private System.Windows.Forms.Button btnBalanceSelectConnection;
     }
 }
