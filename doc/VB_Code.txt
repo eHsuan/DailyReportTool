@@ -1,0 +1,4911 @@
+Option Explicit
+
+'===========================
+' 產能平衡圖(自動化 VBA) v4.17.3
+' 包含工作表：S1~S7, S0(設定)
+' Update Log:
+'  v4.3: 原始功能建立 (S1-S7)
+'  v4.5.1: S3 更新 (同步資料/維修匯入)
+'  v4.5.2: S3 產能計算優化
+'  v4.6.0: S3 自動上報匯入 / S7 周報表完整化
+'  v4.7.1: S3 圖表生成改用原生陣列與字典，修復 Automation 錯誤
+'  v4.8.0: S3 圖表優化 (下移8列、水藍色虛線、資料標籤、能力值四捨五入)
+'  v4.8.1: 修正 PB_S3_GenerateBalanceCharts 變數未定義錯誤
+'  v4.8.2: 修正 S3 機故比例計算邏輯，增加「機故資料天數(S3!B2)」為分母
+'  v4.8.5: 修正 S4 公式對應：嚴格遵循 S2!B4->B5, C4->B6, B8->B7, B7->B8, B10->E5, C10->E6, B5/B6->D5, C5/C6->D6
+'  v4.8.6: 修正 S4 大表欄位索引錯誤 (D欄 DailyLot 偏移量修正為 +2)，避免覆蓋 E欄 PassCount
+'  v4.9.0: S5 功能大幅改版 (引入 TP 換線限制與手動決策)
+'          - 匯入資料增加 J 欄 (換線限制: X=不可, V=可)
+'          - 列表位置固定於 A15 (目前) 與 L15 (換線後)
+'          - 新增「換線決策」下拉選單
+'          - 計算邏輯依據使用者決策動態切換產能 (uPOL<->uBMU)
+'  v4.10.0: S5 新增「目前狀態」表格 (A5)，原計算結果下移至 A9
+'          - 匯入 TP 資料時自動計算目前總產能並顯示於 A5:E8
+'          - 計算結果區塊移動至 A9:E12，避免重疊
+'  v4.10.1: 修正 S5 換線計算邏輯，移除換線後產品名稱的「-TP」後綴 (維持 uPOL/uBMU 命名一致性)
+'  v4.10.2: 修正 S5 計算換線時誤刪 A15:A16 列表標題的 Bug (縮小清除範圍至 A10:E14)
+'  v4.11.0: S6 功能重構
+'          - 匯入功能改為「匯入自動上報資料」，邏輯比照 S3 但針對 S5 設備清單
+'          - 圖表生成邏輯更新：依產品 (uPOL/uBMU) 生成堆疊圖
+'          - 堆疊圖新增「換線增加」(藍色) 與「換線減少」(虛線) 區塊
+'  v4.11.1: 修正 PB_S6_ImportAutoReport 編譯錯誤 (End For -> Next k)
+'  v4.11.2: 修正 PB_S6_CreateCharts 重複宣告變數 mKey 的錯誤
+'  v4.11.3: 修正 DrawS6Chart 中 msoPatternLightDown 常數名稱錯誤 (改為 msoPatternLightDownwardDiagonal)
+'  v4.11.4: 更新 S6 圖表「換線減少」樣式為：白色填滿 + 黑色虛線框 (2.25pt)
+'  v4.11.5: 修正 S6 圖表「目標產能」顯示方式
+'          - 由於單點折線圖無法顯示線條，改用繪製形狀(Shape)方式插入虛直線
+'          - 強制設定 Y 軸最大值以確保線條位置準確
+'          - 目標線樣式：藍色虛線
+'  v4.12.0: S6 功能大幅修改
+'          - 取消 S6 匯入機故資料功能
+'          - 改為直接連結 S3 (第3頁) 的機故/產速比例設定 (Row 14, 15)
+'          - 圖表邏輯比照 S3 專用設備平衡圖 (堆疊邏輯：灰/黃/紅)
+'          - 換線模擬邏輯維持：換線減少(白色虛線框)、換線增加(藍色)
+'  v4.13.0: S6 圖表升級為群組完整產能圖
+'          - 自動偵測包含 uPOL-TP 與 uBMU-TP 的群組 (Group)
+'          - 圖表包含群組內所有製程 (如 NiAu, uPOL-DB 等)
+'          - TP 製程套用換線模擬邏輯 (虛線框/藍色塊)
+'          - 一般製程套用 S3 標準邏輯 (灰/黃/紅)
+'          - 回歸使用折線圖繪製目標線 (因為多柱圖可正常顯示折線)
+'  v4.13.1: 修正 PB_S6_CreateCharts 中 pN 變數重複宣告的錯誤
+'  v4.14.0: 修正 S6 圖表 TP 產品單位問題 (PCS -> 片)
+'          - 讀取 S5 設定的「一片幾顆」參數
+'          - 將匯入的 TP 產能 (PCS) 除以顆數轉為片
+'          - TP 產品的目標產能直接使用 S3 的設定 (片)，不再讀取 S5 的計算結果 (顆)
+'  v4.16.0: 將「產生第5頁 (TP換線)」按鈕從 S4 移至 S3
+'  v4.16.1: 補發 S3 更新程式碼，確保按鈕正確顯示
+'  v4.17.0: 新增 S7, S8, S9 (Before/Now/Future) 功能架構
+'          S7: 目標片次與設備能力 (三區塊)
+'          S8: TP換線 (三區塊)
+'          S9: 圖表 (三區塊)
+'  v4.17.3: 修正 ParseProdNames 函式中變數 i 重複使用的編譯錯誤
+'  v4.17.4: 修正 PB_GenerateSheet2 中格式設定範圍的欄位索引錯誤 (避免 1004 錯誤)
+'  v4.17.5: 修正 BuildAvgCTFormula 與 CleanEquipBefore 中因單行語法錯誤導致的 1004 錯誤與邏輯錯誤
+'===========================
+
+'---------- Sheet Names ----------
+Private Const S0 As String = "00_設定"
+Private Const S1 As String = "01_匯入與需求"
+Private Const S2 As String = "02_產品需求及設備稼動率計算"
+Private Const S3 As String = "03_目標片次與設備能力"
+Private Const S4 As String = "04_稼動率(Before_Now_Future)"
+Private Const S5 As String = "05_目標片次跟設備能力(含TP換線)"
+Private Const S6 As String = "06_目標片次跟設備能力圖"
+Private Const S7 As String = "07_目標片次與設備能力(B_N_F)"
+Private Const S8 As String = "08_目標片次跟設備能力(含TP換線)(B_N_F)"
+Private Const S9 As String = "09_目標片次跟設備能力圖(B_N_F)"
+
+Private Const SD As String = "PB_Data"
+Private Const SD_TP As String = "TP_Data" ' Hidden sheet for S5 imported data
+Private Const SD_DT As String = "DT_Data" ' Hidden sheet for S6 down time data
+Private Const SD_DT7 As String = "DT_Data_Week" ' Hidden sheet for S7 down time data
+
+'---------- Buttons ----------
+Private Const BTN_S1_IMPORT As String = "btnPB_ImportIE"
+Private Const BTN_S1_TO_S2  As String = "btnPB_GenS2"
+Private Const BTN_S1_RECALC As String = "btnPB_Recalc"
+Private Const BTN_S1_REBUILD As String = "btnPB_Rebuild"
+
+Private Const BTN_S2_SAVE As String = "btnPB_SaveS2AsXLSX"
+Private Const BTN_S2_TO_S3 As String = "btnPB_GenS3"
+Private Const BTN_S2_TO_S4 As String = "btnPB_GenS4"
+
+Private Const BTN_S3_SAVE As String = "btnPB_SaveS3AsXLSX"
+Private Const BTN_S3_IMPORT_MAINT As String = "btnPB_S3_ImportMaint"
+Private Const BTN_S3_IMPORT_AUTO As String = "btnPB_S3_ImportAuto"
+Private Const BTN_S3_CHART As String = "btnPB_S3_GenCharts"
+Private Const BTN_S3_CLEAR_DT As String = "btnPB_S3_ClearDT"
+
+Private Const BTN_S4_SAVE As String = "btnPB_SaveS4AsXLSX"
+Private Const BTN_S4_TO_S5 As String = "btnPB_GenS5"
+Private Const BTN_S4_TO_S7 As String = "btnPB_GenS7"
+
+Private Const BTN_S5_IMPORT As String = "btnPB_S5_Import"
+Private Const BTN_S5_CALC   As String = "btnPB_S5_Calc"
+Private Const BTN_S5_SAVE   As String = "btnPB_SaveS5AsXLSX"
+Private Const BTN_S5_TO_S6  As String = "btnPB_GenS6"
+
+Private Const BTN_S6_IMPORT As String = "btnPB_S6_ImportDT"
+Private Const BTN_S6_CHART  As String = "btnPB_S6_CreateCharts"
+Private Const BTN_S6_SAVE   As String = "btnPB_SaveS6AsXLSX"
+Private Const BTN_S6_TO_S7  As String = "btnPB_GenS7"
+
+Private Const BTN_S7_IMPORT As String = "btnPB_S7_ImportDT"
+Private Const BTN_S7_CHART  As String = "btnPB_S7_CreateCharts"
+Private Const BTN_S7_SAVE   As String = "btnPB_SaveS7AsXLSX"
+Private Const BTN_S7_TO_S8  As String = "btnPB_GenS8"
+Private Const BTN_S8_TO_S9  As String = "btnPB_GenS9"
+Private Const BTN_S9_CHART  As String = "btnPB_S9_CreateCharts"
+
+
+'---------- Anchors ----------
+Private Const S1_TABLE_TOP As String = "A6"
+Private Const S2_TOP_TABLE As String = "A3"
+Private Const S2_TABLE2_TOP As String = "A13"
+
+'---------- Colors ----------
+Private Const CLR_P1 As String = "#64D7D7"
+Private Const CLR_P2 As String = "#3FFF90"
+Private Const CLR_P3 As String = "#A1CEF7"
+Private Const CLR_DEMAND As String = "#FFCC00"
+Private Const CLR_UTIL As String = "#F2CEEF"
+Private Const CLR_A_SHARED As String = "#FFFFCC"
+Private Const CLR_A_DEDI As String = "#C0E4F5"
+Private Const CLR_OVER_BG_HEX As String = "#FFCCCC"
+Private Const CLR_OVER_FG_HEX As String = "#C00000"
+
+'---------- PB_Data schema ----------
+Private Enum PBDataCol
+    cGroup = 1
+    cMachine = 2
+    cP1_CT = 3
+    cP1_Lot = 4
+    cP1_Pass = 5
+    cP2_CT = 6
+    cP2_Lot = 7
+    cP2_Pass = 8
+    cP3_CT = 9
+    cP3_Lot = 10
+    cP3_Pass = 11
+    cEquipBefore = 12
+    cSourceRow = 13
+End Enum
+
+'====================================================
+' 主重建流程
+'====================================================
+Public Sub PB_RebuildAll()
+    Application.ScreenUpdating = False
+
+    Dim ws1 As Worksheet, ws2 As Worksheet, ws3 As Worksheet, ws4 As Worksheet, ws5 As Worksheet, ws6 As Worksheet
+    Dim ws7 As Worksheet, ws8 As Worksheet, ws9 As Worksheet
+    Dim wsd As Worksheet, wsdTP As Worksheet, wsdDT As Worksheet, wsdDT7 As Worksheet
+    
+    Set ws1 = GetOrCreateSheet(S1)
+    Set ws2 = GetOrCreateSheet(S2)
+    Set ws3 = GetOrCreateSheet(S3)
+    Set ws4 = GetOrCreateSheet(S4)
+    Set ws5 = GetOrCreateSheet(S5)
+    Set ws6 = GetOrCreateSheet(S6)
+    Set ws7 = GetOrCreateSheet(S7)
+    Set ws8 = GetOrCreateSheet(S8)
+    Set ws9 = GetOrCreateSheet(S9)
+    
+    Set wsd = GetOrCreateSheet(SD)
+    Set wsdTP = GetOrCreateSheet(SD_TP)
+    Set wsdDT = GetOrCreateSheet(SD_DT)
+    Set wsdDT7 = GetOrCreateSheet(SD_DT7)
+
+    MakeVeryHidden wsd
+    MakeVeryHidden wsdTP
+    MakeVeryHidden wsdDT
+    MakeVeryHidden wsdDT7
+    
+    PB_InitPBData wsd
+
+    PB_S1_BuildLayout ws1, 3, Array("產品1", "產品2", "產品3")
+    PB_ClearSheet ws2
+    PB_ClearSheet ws3
+    PB_ClearSheet ws4
+    PB_ClearSheet ws5
+    PB_ClearSheet ws6
+    PB_ClearSheet ws7
+    PB_ClearSheet ws8
+    PB_ClearSheet ws9
+
+    Application.ScreenUpdating = True
+    MsgBox "已重建資料結構 (含 S7/S8/S9 B/N/F 架構)。請至「01_資料輸入與檢視」開始。", vbInformation
+End Sub
+
+'====================================================
+' Sheet1 layout
+'====================================================
+Private Sub PB_S1_BuildLayout(ByVal ws As Worksheet, ByVal productCount As Long, ByVal prodNames As Variant)
+    ws.Cells.Clear
+    ws.Cells.Font.name = "Microsoft JhengHei"
+    ws.Cells.Font.Size = 11
+
+    With ws.Range("A1:H1")
+        .Merge
+        .Value = "產能平衡圖 - 第1頁 (匯入 IE 檔案 & 設定產能需求)"
+        .Font.Bold = True
+        .Font.Size = 16
+        .RowHeight = 26
+    End With
+
+    DeleteButtonIfExists ws, BTN_S1_IMPORT
+    DeleteButtonIfExists ws, BTN_S1_TO_S2
+    DeleteButtonIfExists ws, BTN_S1_RECALC
+    DeleteButtonIfExists ws, BTN_S1_REBUILD
+
+    Dim anchor As Range
+    Set anchor = ws.Range("G3")
+
+    AddFormButton ws, BTN_S1_REBUILD, "重置/清空重建", "PB_RebuildAll", anchor.Left, anchor.Top, 160, 26
+    AddFormButton ws, BTN_S1_IMPORT, "匯入 IE 檔案", "PB_ImportIEFile", anchor.Left, anchor.Top + 32, 160, 26
+    AddFormButton ws, BTN_S1_RECALC, "更新公式/資料", "PB_S1_RecalcFormulas", anchor.Left, anchor.Top + 64, 160, 26
+    AddFormButton ws, BTN_S1_TO_S2, "開始計算 → 產生第2頁", "PB_GenerateSheet2", anchor.Left, anchor.Top + 96, 220, 26
+
+    ws.Range("A3").Value = "狀態："
+    ws.Range("B3").Value = "尚未匯入 IE 檔案"
+    ws.Range("A3").Font.Bold = True
+
+    ws.Range("A4").Value = "IE產品："
+    ws.Range("B4").Value = "(匯入後自動帶入)"
+    ws.Range("A4").Font.Bold = True
+
+    Dim topLeft As Range
+    Set topLeft = ws.Range(S1_TABLE_TOP)
+
+    ws.Cells(topLeft.Row, topLeft.Column).Value = "項目"
+    Dim p As Long
+    For p = 1 To productCount
+        ws.Cells(topLeft.Row, topLeft.Column + p).Value = CStr(prodNames(p - 1))
+    Next p
+
+    Dim lastCol As Long: lastCol = topLeft.Column + productCount
+    With ws.Range(ws.Cells(topLeft.Row, topLeft.Column), ws.Cells(topLeft.Row, lastCol))
+        .Font.Bold = True
+        .Interior.Color = RGB(230, 230, 230)
+        .HorizontalAlignment = xlCenter
+    End With
+
+    Dim labels As Variant
+    labels = Array( _
+        "產能需求(顆數)", _
+        "一片幾顆", _
+        "工單片數", _
+        "每日生產時數", _
+        "每月生產日數", _
+        "總片數(每月)", _
+        "筆數(每日)" _
+    )
+
+    Dim i As Long
+    For i = 0 To UBound(labels)
+        ws.Cells(topLeft.Row + 1 + i, topLeft.Column).Value = labels(i)
+        ws.Cells(topLeft.Row + 1 + i, topLeft.Column).Font.Bold = (i <= 4)
+        ws.Cells(topLeft.Row + 1 + i, topLeft.Column).Interior.Color = HexToLong(CLR_A_SHARED)
+    Next i
+
+    ws.Range(ws.Cells(topLeft.Row + 1, topLeft.Column + 1), ws.Cells(topLeft.Row + 5, lastCol)).ClearContents
+
+    '公式連動 (每天產出目標/每天產出片數)
+    If productCount >= 2 Then ws.Cells(topLeft.Row + 4, topLeft.Column + 2).Formula = "=" & ws.Cells(topLeft.Row + 4, topLeft.Column + 1).Address(False, False)
+    If productCount >= 3 Then ws.Cells(topLeft.Row + 4, topLeft.Column + 3).Formula = "=" & ws.Cells(topLeft.Row + 4, topLeft.Column + 1).Address(False, False)
+    If productCount >= 2 Then ws.Cells(topLeft.Row + 5, topLeft.Column + 2).Formula = "=" & ws.Cells(topLeft.Row + 5, topLeft.Column + 1).Address(False, False)
+    If productCount >= 3 Then ws.Cells(topLeft.Row + 5, topLeft.Column + 3).Formula = "=" & ws.Cells(topLeft.Row + 5, topLeft.Column + 1).Address(False, False)
+
+    For p = 1 To productCount
+        Dim col As Long: col = topLeft.Column + p
+        ws.Cells(topLeft.Row + 6, col).Formula = "=IFERROR(CEILING(" & ws.Cells(topLeft.Row + 1, col).Address(False, False) & "/" & ws.Cells(topLeft.Row + 2, col).Address(False, False) & ",1),0)"
+        ws.Cells(topLeft.Row + 7, col).Formula = "=IFERROR(CEILING((" & ws.Cells(topLeft.Row + 6, col).Address(False, False) & "/" & ws.Cells(topLeft.Row + 5, col).Address(False, False) & ")/" & ws.Cells(topLeft.Row + 3, col).Address(False, False) & ",1),0)"
+    Next p
+
+    ws.Range(ws.Cells(topLeft.Row + 1, topLeft.Column + 1), ws.Cells(topLeft.Row + 7, lastCol)).NumberFormat = "#,##0"
+    ApplyBorder ws.Range(ws.Cells(topLeft.Row, topLeft.Column), ws.Cells(topLeft.Row + 7, lastCol))
+
+    ws.Columns("A").ColumnWidth = 18
+    ws.Columns("B:D").ColumnWidth = 16
+    ws.Columns("E").ColumnWidth = 2
+    ws.Columns("F").ColumnWidth = 2
+    ws.Columns("G:H").ColumnWidth = 22
+End Sub
+
+'====================================================
+'  更新公式/資料：每天產出目標/每天產出片數強制整數
+'====================================================
+Public Sub PB_S1_RecalcFormulas()
+    EnsureBaseSheets
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Worksheets(S1)
+    ForceIntegerCell ws.Range("B10")
+    ForceIntegerCell ws.Range("B11")
+    ws.Calculate
+    MsgBox "已更新公式 (每天產出目標/每天產出片數已取整)。", vbInformation
+End Sub
+
+Private Sub PB_S1_RecalcFormulas_Silent()
+    EnsureBaseSheets
+    Dim ws As Worksheet: Set ws = ThisWorkbook.Worksheets(S1)
+    ForceIntegerCell ws.Range("B10")
+    ForceIntegerCell ws.Range("B11")
+    ws.Calculate
+End Sub
+
+Private Sub ForceIntegerCell(ByVal c As Range)
+    On Error GoTo SafeExit
+    If c Is Nothing Then Exit Sub
+    If Trim$(CStr(c.Value)) = "" Then Exit Sub
+    If IsNumeric(c.Value) Then
+        Dim d As Double: d = CDbl(c.Value)
+        If d > 2147483647# Then
+            c.Value = d
+        Else
+            c.Value = CLng(Application.WorksheetFunction.Round(d, 0))
+        End If
+        c.NumberFormat = "#,##0"
+    End If
+SafeExit:
+End Sub
+
+'====================================================
+' Import IE file -> PB_Data (VeryHidden)
+'====================================================
+Public Sub PB_ImportIEFile()
+    On Error GoTo EH
+    EnsureBaseSheets
+
+    Dim f As Variant
+    f = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "選擇 IE 產能計算表 (來源檔案)")
+    If f = False Then Exit Sub
+
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    Dim wb As Workbook, wsIE As Worksheet
+    Set wb = Workbooks.Open(CStr(f), ReadOnly:=True)
+
+    On Error Resume Next
+    Set wsIE = wb.Worksheets("IE主表")
+    On Error GoTo EH ' Restore main error handler
+
+    If wsIE Is Nothing Then
+        wb.Close SaveChanges:=False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "找不到工作表：IE主表。請確認檔案格式。", vbExclamation
+        Exit Sub
+    End If
+
+    Dim productCount As Long, prodNames(1 To 3) As String, equipCol As Long
+    If Not DetectIEHeader(wsIE, productCount, prodNames, equipCol) Then
+        wb.Close SaveChanges:=False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "IE主表標題解析失敗 (無法判斷產品量/設備欄)。", vbExclamation
+        Exit Sub
+    End If
+
+    Dim wsd As Worksheet, ws1 As Worksheet
+    Set wsd = GetOrCreateSheet(SD)
+    Set ws1 = GetOrCreateSheet(S1)
+
+    MakeVeryHidden wsd
+    PB_InitPBData wsd
+
+    wsd.Range("B1").Value = CStr(f)
+    wsd.Range("B2").Value = Format$(Now, "yyyy-mm-dd hh:nn:ss")
+    wsd.Range("B3").Value = productCount
+    wsd.Range("B4").Value = JoinProdNames(productCount, prodNames)
+
+    'Read station counts for balance rate (Sheet4)
+    ExtractStationCountsFromIE wsIE, wsd
+
+    Dim topRow As Long: topRow = 11
+    Dim startDataRow As Long: startDataRow = topRow + 2
+    Dim lastRow As Long: lastRow = wsIE.Cells(wsIE.Rows.count, 1).End(xlUp).Row
+
+    Dim curGroup As String
+    curGroup = "SHARED"
+
+    Dim r As Long, outR As Long
+    outR = 7
+
+    For r = startDataRow To lastRow
+        ' [v4.17.6 Fix] 若遇到跨欄置中則跳過 (依使用者需求，避免誤讀標題或裝飾列)
+        If wsIE.Cells(r, 1).MergeCells Then
+            ' Skip merged row
+        Else
+            Dim aVal As String
+            aVal = Trim$(CStr(wsIE.Cells(r, 1).Value))
+    
+            If aVal = "" Then
+                'skip
+            ElseIf InStr(1, aVal, "（專線設備）", vbTextCompare) > 0 Then
+                curGroup = "DEDICATED|" & StripSuffix(aVal, "（專線設備）")
+            Else
+                wsd.Cells(outR, cGroup).Value = curGroup
+                wsd.Cells(outR, cMachine).Value = aVal
+    
+                Dim p As Long, baseCol As Long
+                For p = 1 To productCount
+                    baseCol = 2 + (p - 1) * 3
+                    wsd.Cells(outR, cP1_CT + (p - 1) * 3).Value = wsIE.Cells(r, baseCol).Value
+                    wsd.Cells(outR, cP1_Lot + (p - 1) * 3).Value = wsIE.Cells(r, baseCol + 1).Value
+                    wsd.Cells(outR, cP1_Pass + (p - 1) * 3).Value = wsIE.Cells(r, baseCol + 2).Value
+                Next p
+    
+                wsd.Cells(outR, cEquipBefore).Value = wsIE.Cells(r, equipCol).Value
+                wsd.Cells(outR, cSourceRow).Value = r
+    
+                outR = outR + 1
+            End If
+        End If
+    Next r
+
+    wb.Close SaveChanges:=False
+    Application.DisplayAlerts = True
+
+    'Rebuild S1 by productCount (no blank products)
+    Dim pN As Variant
+    pN = Array(prodNames(1), prodNames(2), prodNames(3))
+    PB_S1_BuildLayout ws1, productCount, pN
+
+    ws1.Range("B4").Value = JoinProdNames(productCount, prodNames)
+    ws1.Range("B3").Value = "已匯入 IE (" & wsd.Range("B2").Value & ")"
+
+    Application.ScreenUpdating = True
+    MsgBox "IE 匯入完成。產品數=" & productCount & "；資料列=" & (outR - 7) & "。", vbInformation
+    Exit Sub
+
+EH:
+    ' Error Handler
+    If Not wb Is Nothing Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    MsgBox "匯入 IE 檔案發生錯誤：" & vbCrLf & "Err " & Err.Number & ": " & Err.Description, vbCritical
+End Sub
+
+'====================================================
+' 從 IE 表格中讀取共用設備總台數 / 專用總台數 (用於S4計算平衡率)
+'====================================================
+Private Sub ExtractStationCountsFromIE(ByVal wsIE As Worksheet, ByVal wsd As Worksheet)
+    On Error GoTo SafeExit
+
+    Dim sharedCount As Variant: sharedCount = Empty
+    sharedCount = FindValueRightOfLabel(wsIE, "共用設備總台數")
+    If IsEmpty(sharedCount) Or sharedCount = "" Then sharedCount = 0
+    wsd.Range("B5").Value = CLng(val(sharedCount))
+
+    wsd.Range("D2:E200").ClearContents
+
+    Dim headerCell As Range
+    Set headerCell = FindTableHeaderCell(wsIE, "幾X幾產品", "專用總台數")
+    If Not headerCell Is Nothing Then
+        Dim r As Long: r = headerCell.Row + 1
+        Dim cProd As Long: cProd = headerCell.Column
+        Dim cEq As Long: cEq = headerCell.Column + 1
+
+        Dim outR As Long: outR = 2
+        Do While True
+            Dim vProd As Variant: vProd = wsIE.Cells(r, cProd).Value
+            Dim vEq As Variant: vEq = wsIE.Cells(r, cEq).Value
+            If Trim$(CStr(vProd)) = "" Then Exit Do
+
+            wsd.Cells(outR, "D").Value = CLng(val(vProd))
+            wsd.Cells(outR, "E").Value = CLng(val(vEq))
+            outR = outR + 1
+            r = r + 1
+            If outR > 200 Then Exit Do
+        Loop
+    End If
+
+SafeExit:
+End Sub
+
+Private Function FindValueRightOfLabel(ByVal ws As Worksheet, ByVal labelText As String) As Variant
+    Dim rng As Range, f As Range
+    Set rng = ws.UsedRange
+    Set f = rng.Find(What:=labelText, LookIn:=xlValues, LookAt:=xlPart, MatchCase:=False)
+    If f Is Nothing Then
+        FindValueRightOfLabel = Empty
+        Exit Function
+    End If
+
+    Dim v1 As Variant, v2 As Variant
+    v1 = ws.Cells(f.Row, f.Column + 1).Value
+    v2 = ws.Cells(f.Row, f.Column + 2).Value
+
+    If IsNumeric(v1) Or (Trim$(CStr(v1)) <> "" And val(v1) <> 0) Then
+        FindValueRightOfLabel = v1
+    ElseIf IsNumeric(v2) Or (Trim$(CStr(v2)) <> "" And val(v2) <> 0) Then
+        FindValueRightOfLabel = v2
+    Else
+        FindValueRightOfLabel = v1
+    End If
+End Function
+
+Private Function FindTableHeaderCell(ByVal ws As Worksheet, ByVal h1 As String, ByVal h2 As String) As Range
+    Dim rng As Range, f As Range
+    Set rng = ws.UsedRange
+    Set f = rng.Find(What:=h1, LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=False)
+    If f Is Nothing Then Exit Function
+
+    If Trim$(CStr(ws.Cells(f.Row, f.Column + 1).Value)) = h2 Then
+        Set FindTableHeaderCell = f
+        Exit Function
+    End If
+
+    Dim firstAddr As String: firstAddr = f.Address
+    Do
+        If Trim$(CStr(ws.Cells(f.Row, f.Column + 1).Value)) = h2 Then
+            Set FindTableHeaderCell = f
+            Exit Function
+        End If
+        Set f = rng.FindNext(f)
+        If f Is Nothing Then Exit Function
+    Loop While f.Address <> firstAddr
+End Function
+
+Private Function DetectIEHeader(ByVal wsIE As Worksheet, ByRef productCount As Long, ByRef prodNames() As String, ByRef equipCol As Long) As Boolean
+    DetectIEHeader = False
+
+    Dim topRow As Long: topRow = 11
+    Dim lastC As Long, c As Long
+    lastC = wsIE.Cells(topRow, wsIE.Columns.count).End(xlToLeft).Column
+
+    equipCol = 0
+    For c = 1 To lastC
+        If Trim$(CStr(wsIE.Cells(topRow, c).Value)) = "設備數量" Then
+            equipCol = c: Exit For
+        End If
+    Next c
+    If equipCol = 0 Then Exit Function
+
+    Dim ctStart As Long: ctStart = 2
+    productCount = (equipCol - ctStart) \ 3
+    If productCount < 1 Or productCount > 3 Then Exit Function
+
+    Dim p As Long, baseCol As Long, headerText As String
+    
+    ' Fix: Properly loop to initialize array
+    For p = 1 To 3
+        prodNames(p) = ""
+    Next p
+
+    For p = 1 To productCount
+        baseCol = 2 + (p - 1) * 3
+        headerText = Trim$(CStr(wsIE.Cells(topRow, baseCol).Value))
+        If headerText = "" Then headerText = "產品" & p
+        'headerText = StripSuffix(headerText, "(共用設備)")
+        prodNames(p) = headerText
+    Next p
+
+    DetectIEHeader = True
+End Function
+
+'====================================================
+' Sheet2 Generate
+'====================================================
+Public Sub PB_GenerateSheet2()
+    On Error GoTo EH
+    EnsureBaseSheets
+
+    PB_S1_RecalcFormulas_Silent
+
+    Dim ws1 As Worksheet, ws2 As Worksheet, wsd As Worksheet
+    Set ws1 = GetOrCreateSheet(S1)
+    Set ws2 = GetOrCreateSheet(S2)
+    Set wsd = GetOrCreateSheet(SD)
+
+    If Trim$(CStr(wsd.Range("B1").Value)) = "" Then
+        MsgBox "尚未匯入 IE 檔案，請先執行「匯入 IE 檔案」。", vbExclamation
+        Exit Sub
+    End If
+
+    Application.ScreenUpdating = False
+    PB_ClearSheet ws2
+
+    Dim productCount As Long
+    productCount = CLng(val(wsd.Range("B3").Value))
+    If productCount < 1 Then productCount = 1
+    If productCount > 3 Then productCount = 3
+
+    Dim prodNames(1 To 3) As String
+    ParseProdNames wsd.Range("B4").Value, prodNames
+
+    Dim totalCols As Long
+    totalCols = 1 + productCount * 4 + 4 + 4
+
+    With ws2.Range(ws2.Cells(1, 1), ws2.Cells(1, totalCols))
+        .Merge
+        .Value = "產能平衡圖 - 第2頁 (產能需求檢視與參數調整計算)"
+        .Font.Bold = True
+        .Font.Size = 16
+        .RowHeight = 26
+    End With
+
+    BuildSheet2TopDemandTable ws2, ws1, productCount, prodNames
+
+    DeleteButtonIfExists ws2, BTN_S2_SAVE
+    DeleteButtonIfExists ws2, BTN_S2_TO_S3
+    DeleteButtonIfExists ws2, BTN_S2_TO_S4
+
+    Dim anchor2 As Range: Set anchor2 = ws2.Range("G3")
+    AddFormButton ws2, BTN_S2_SAVE, "另存新檔 (僅此頁 .xlsx)", "PB_SaveSheet2AsXLSX", anchor2.Left, anchor2.Top, 220, 26
+    AddFormButton ws2, BTN_S2_TO_S3, "計算產生第3頁 (目標片次&設備能力)", "PB_GenerateSheet3", anchor2.Left, anchor2.Top + 32, 300, 26
+    AddFormButton ws2, BTN_S2_TO_S4, "計算產生第4頁 (Before/Now/Future)", "PB_GenerateSheet4", anchor2.Left, anchor2.Top + 64, 320, 26
+
+    Dim topRow As Long, topCol As Long
+    topRow = ws2.Range(S2_TABLE2_TOP).Row
+    topCol = ws2.Range(S2_TABLE2_TOP).Column
+
+    ws2.Cells(topRow, topCol).Value = "設備名稱"
+
+    Dim curCol As Long, p As Long
+    curCol = topCol + 1
+    For p = 1 To productCount
+        ws2.Range(ws2.Cells(topRow, curCol), ws2.Cells(topRow, curCol + 3)).Merge
+        ws2.Cells(topRow, curCol).Value = prodNames(p)
+        curCol = curCol + 4
+    Next p
+
+    ws2.Range(ws2.Cells(topRow, curCol), ws2.Cells(topRow, curCol + 3)).Merge
+    ws2.Cells(topRow, curCol).Value = "需求計算"
+    curCol = curCol + 4
+
+    ws2.Range(ws2.Cells(topRow, curCol), ws2.Cells(topRow, curCol + 3)).Merge
+    ws2.Cells(topRow, curCol).Value = "稼動率計算"
+
+    ws2.Range(ws2.Cells(topRow, topCol), ws2.Cells(topRow, topCol + totalCols - 1)).Font.Bold = True
+    ws2.Range(ws2.Cells(topRow, topCol), ws2.Cells(topRow, topCol + totalCols - 1)).HorizontalAlignment = xlCenter
+
+    Dim hdrRow As Long: hdrRow = topRow + 1
+    ws2.Rows(hdrRow).RowHeight = 42
+
+    curCol = topCol + 1
+    For p = 1 To productCount
+        ws2.Cells(hdrRow, curCol + 0).Value = "C/T" & vbLf & "(sec/片)"
+        ws2.Cells(hdrRow, curCol + 1).Value = "片數" & vbLf & "(片/LOT)"
+        ws2.Cells(hdrRow, curCol + 2).Value = "日需求LOT" & vbLf & "(日/LOT)"
+        ws2.Cells(hdrRow, curCol + 3).Value = "製程道次" & vbLf & "(次/片)"
+        curCol = curCol + 4
+    Next p
+
+    ws2.Cells(hdrRow, curCol + 0).Value = "平均 C/T" & vbLf & "(sec/片)"
+    ws2.Cells(hdrRow, curCol + 1).Value = "總產能" & vbLf & "(片/日)"
+    ws2.Cells(hdrRow, curCol + 2).Value = "需求時間" & vbLf & "(hr/日)"
+    ws2.Cells(hdrRow, curCol + 3).Value = "需求台數"
+    curCol = curCol + 4
+
+    ws2.Cells(hdrRow, curCol + 0).Value = "擴產前設備數"
+    ws2.Cells(hdrRow, curCol + 1).Value = "擴產前稼動率"
+    ws2.Cells(hdrRow, curCol + 2).Value = "擴產後設備數"
+    ws2.Cells(hdrRow, curCol + 3).Value = "擴產後稼動率"
+
+    With ws2.Range(ws2.Cells(hdrRow, topCol), ws2.Cells(hdrRow, topCol + totalCols - 1))
+        .Font.Bold = True
+        .WrapText = True
+        .HorizontalAlignment = xlCenter
+    End With
+
+    ApplyHeaderColors2 ws2, topRow, topCol, productCount
+
+    ' [Update] Daily Hours is now at B8 (Moved down 1 row)
+    Dim dailyHAddr As String: dailyHAddr = ws2.Range("B8").Address(False, False)
+
+    Dim lastD As Long: lastD = wsd.Cells(wsd.Rows.count, cMachine).End(xlUp).Row
+    Dim outRow As Long: outRow = topRow + 2
+
+    Dim dR As Long
+    For dR = 7 To lastD
+        Dim mName As String: mName = Trim$(CStr(wsd.Cells(dR, cMachine).Value))
+        If mName <> "" Then
+            Dim grp As String: grp = CStr(wsd.Cells(dR, cGroup).Value)
+
+            ws2.Cells(outRow, topCol).Value = mName
+            If Left$(grp, 6) = "SHARED" Then
+                ws2.Cells(outRow, topCol).Interior.Color = HexToLong(CLR_A_SHARED)
+            Else
+                ws2.Cells(outRow, topCol).Interior.Color = HexToLong(CLR_A_DEDI)
+            End If
+
+            Dim dedicatedProdIdx As Long: dedicatedProdIdx = 0
+            If Left$(grp, 10) = "DEDICATED|" Then
+                Dim dName As String: dName = GetAfterPipe(grp)
+                dedicatedProdIdx = FindProdIndexByName(prodNames, productCount, dName)
+            End If
+
+            curCol = topCol + 1
+            Dim pp As Long
+            For pp = 1 To productCount
+                If dedicatedProdIdx > 0 And pp <> dedicatedProdIdx Then
+                    ws2.Cells(outRow, curCol + 0).Value = ""
+                    ws2.Cells(outRow, curCol + 1).Value = ""
+                    ws2.Cells(outRow, curCol + 3).Value = ""
+                    ws2.Cells(outRow, curCol + 2).Formula = "=0"
+                Else
+                    ws2.Cells(outRow, curCol + 0).Value = wsd.Cells(dR, cP1_CT + (pp - 1) * 3).Value
+                    ws2.Cells(outRow, curCol + 1).Value = wsd.Cells(dR, cP1_Lot + (pp - 1) * 3).Value
+                    ws2.Cells(outRow, curCol + 3).Value = wsd.Cells(dR, cP1_Pass + (pp - 1) * 3).Value
+                    ' [Update] Daily Lot Demand is now at Row 11 (Moved down 1 row)
+                    ws2.Cells(outRow, curCol + 2).Formula = "=" & ws2.Cells(11, 1 + pp).Address(False, False)
+                End If
+                curCol = curCol + 4
+            Next pp
+
+            Dim avgCTCol As Long, totDayCol As Long, timeDayCol As Long, needEqCol As Long
+            avgCTCol = topCol + 1 + productCount * 4
+            totDayCol = avgCTCol + 1
+            timeDayCol = avgCTCol + 2
+            needEqCol = avgCTCol + 3
+
+            ws2.Cells(outRow, avgCTCol).Formula = BuildAvgCTFormula(ws2, outRow, topCol, productCount)
+            ws2.Cells(outRow, totDayCol).Formula = BuildTotalDayPiecesRowFormula(ws2, outRow, topCol, productCount)
+
+            ws2.Cells(outRow, timeDayCol).Formula = "=IFERROR(" & ws2.Cells(outRow, avgCTCol).Address(False, False) & "*" & ws2.Cells(outRow, totDayCol).Address(False, False) & "/3600,0)"
+            ws2.Cells(outRow, needEqCol).Formula = "=IFERROR(" & ws2.Cells(outRow, timeDayCol).Address(False, False) & "/" & dailyHAddr & ",0)"
+
+            Dim eqBeforeCol As Long, utilBeforeCol As Long, eqAfterCol As Long, utilAfterCol As Long
+            eqBeforeCol = needEqCol + 1
+            utilBeforeCol = needEqCol + 2
+            eqAfterCol = needEqCol + 3
+            utilAfterCol = needEqCol + 4
+
+            ws2.Cells(outRow, eqBeforeCol).Value = CleanEquipBefore(wsd.Cells(dR, cEquipBefore).Value)
+            ws2.Cells(outRow, utilBeforeCol).Formula = "=IFERROR(" & ws2.Cells(outRow, needEqCol).Address(False, False) & "/" & ws2.Cells(outRow, eqBeforeCol).Address(False, False) & ",0)"
+            ws2.Cells(outRow, eqAfterCol).Formula = "=MAX(" & ws2.Cells(outRow, eqBeforeCol).Address(False, False) & ",CEILING(" & ws2.Cells(outRow, needEqCol).Address(False, False) & ",1))"
+            ws2.Cells(outRow, utilAfterCol).Formula = "=IFERROR(" & ws2.Cells(outRow, needEqCol).Address(False, False) & "/" & ws2.Cells(outRow, eqAfterCol).Address(False, False) & ",0)"
+
+            outRow = outRow + 1
+        End If
+    Next dR
+
+    Dim lastOut As Long: lastOut = outRow - 1
+    If lastOut >= topRow + 2 Then
+        Dim rngAll As Range
+        Set rngAll = ws2.Range(ws2.Cells(topRow, topCol), ws2.Cells(lastOut, topCol + totalCols - 1))
+        ApplyBorder rngAll
+
+        curCol = topCol + 1
+        Dim p2 As Long
+        For p2 = 1 To productCount
+            ws2.Range(ws2.Cells(topRow + 2, curCol + 0), ws2.Cells(lastOut, curCol + 0)).NumberFormat = "#,##0.0"
+            ws2.Range(ws2.Cells(topRow + 2, curCol + 1), ws2.Cells(lastOut, curCol + 1)).NumberFormat = "#,##0"
+            ws2.Range(ws2.Cells(topRow + 2, curCol + 2), ws2.Cells(lastOut, curCol + 2)).NumberFormat = "#,##0.00"
+            ws2.Range(ws2.Cells(topRow + 2, curCol + 3), ws2.Cells(lastOut, curCol + 3)).NumberFormat = "#,##0"
+            curCol = curCol + 4
+        Next p2
+
+        ws2.Range(ws2.Cells(topRow + 2, avgCTCol), ws2.Cells(lastOut, avgCTCol)).NumberFormat = "#,##0.0"
+        ws2.Range(ws2.Cells(topRow + 2, totDayCol), ws2.Cells(lastOut, totDayCol)).NumberFormat = "#,##0"
+        ws2.Range(ws2.Cells(topRow + 2, timeDayCol), ws2.Cells(lastOut, timeDayCol)).NumberFormat = "#,##0.00"
+        ws2.Range(ws2.Cells(topRow + 2, needEqCol), ws2.Cells(lastOut, needEqCol)).NumberFormat = "#,##0.00"
+
+        ws2.Range(ws2.Cells(topRow + 2, eqBeforeCol), ws2.Cells(lastOut, eqBeforeCol)).NumberFormat = "#,##0"
+        ws2.Range(ws2.Cells(topRow + 2, utilBeforeCol), ws2.Cells(lastOut, utilBeforeCol)).NumberFormat = "0%"
+        ws2.Range(ws2.Cells(topRow + 2, eqAfterCol), ws2.Cells(lastOut, eqAfterCol)).NumberFormat = "#,##0"
+        ws2.Range(ws2.Cells(topRow + 2, utilAfterCol), ws2.Cells(lastOut, utilAfterCol)).NumberFormat = "0%"
+
+        ApplyUtilOver100Format ws2.Range(ws2.Cells(topRow + 2, utilBeforeCol), ws2.Cells(lastOut, utilBeforeCol))
+        ApplyUtilOver100Format ws2.Range(ws2.Cells(topRow + 2, utilAfterCol), ws2.Cells(lastOut, utilAfterCol))
+    End If
+
+    ws2.Columns(1).ColumnWidth = 18
+    ws2.Range(ws2.Cells(1, 2), ws2.Cells(1, totalCols)).EntireColumn.ColumnWidth = 12
+
+    SaveSheetHash S2, ComputeSheetHash_Safe(ws2)
+
+    Application.ScreenUpdating = True
+    MsgBox "第2頁已生成。", vbInformation
+    Exit Sub
+
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成第2頁發生錯誤:" & vbCrLf & _
+           "Err " & Err.Number & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub PB_SaveSheet2AsXLSX(): SaveOneSheetAsXLSX S2: End Sub
+
+'====================================================
+' Sheet3 Generate (Updated v4.8.3)
+'====================================================
+Public Sub PB_GenerateSheet3()
+    On Error GoTo EH
+    EnsureBaseSheets
+
+    Dim ws0 As Worksheet: Set ws0 = ThisWorkbook.Worksheets(S0)
+    Dim ws2 As Worksheet: Set ws2 = ThisWorkbook.Worksheets(S2)
+    Dim ws3 As Worksheet: Set ws3 = ThisWorkbook.Worksheets(S3)
+
+    Application.ScreenUpdating = False
+    PB_ClearSheet ws3
+
+    ' ... (Pre-load S0 Mappings) ...
+    Dim dictP2G As Object: Set dictP2G = CreateObject("Scripting.Dictionary")
+    
+    Dim r0 As Long, lastR0 As Long
+    lastR0 = ws0.Cells(ws0.Rows.count, 1).End(xlUp).Row
+    
+    For r0 = 4 To lastR0
+        Dim gName As String: gName = Trim$(CStr(ws0.Cells(r0, 1).Value))
+        Dim pName As String: pName = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        If pName <> "" Then
+            If Not dictP2G.exists(UCase(pName)) Then dictP2G.Add UCase(pName), gName
+        End If
+    Next r0
+
+    ' ... (Hash Check & Sheet2 Check) ...
+    Dim hashOld As String, hashNow As String
+    hashOld = GetSheetHash(S2)
+    hashNow = ComputeSheetHash_Safe(ws2)
+    If hashOld <> "" And hashOld <> hashNow Then
+        If MsgBox("第2頁內容看起來已被修改，可能與匯入資料不同。" & vbCrLf & _
+                  "是否繼續生成第3頁？", vbExclamation + vbYesNo) = vbNo Then
+            Application.ScreenUpdating = True
+            Exit Sub
+        End If
+    End If
+
+    Dim productCount As Long: productCount = DetectProductCountFromSheet2(ws2)
+    Dim lastRow As Long: lastRow = ws2.Cells(ws2.Rows.count, 1).End(xlUp).Row
+    
+    ' [Fix] Threshold adjusted for S2 shift (13+2 headers = 15 start)
+    If lastRow < 15 Then
+        MsgBox "第2頁沒有足夠資料列，無法生成第3頁。", vbExclamation
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+
+    ws3.Range("A1").Value = "產能平衡圖 - 第3頁 (目標片次 & 設備能力)"
+    ws3.Range("A1:E1").Merge
+    ws3.Range("A1").Font.Bold = True
+    ws3.Range("A1").Font.Size = 16
+    ws3.Rows(1).RowHeight = 26
+
+    Dim baseRow As Long: baseRow = 10
+    Dim startCol As Long: startCol = 2
+    
+    ws3.Cells(2, 1).Value = "資料天數"
+    ws3.Cells(2, 2).Value = 7
+
+    ws3.Cells(baseRow, 1).Value = "每日資料"
+    ws3.Cells(baseRow + 1, 1).Value = "機台/站別"
+    ws3.Cells(baseRow + 2, 1).Value = "目標片次"
+    ws3.Cells(baseRow + 3, 1).Value = "設備能力"
+    ws3.Cells(baseRow + 4, 1).Value = "機故比例"
+    ws3.Cells(baseRow + 5, 1).Value = "產速比例"
+    ws3.Cells(baseRow + 6, 1).Value = "設備數量"
+
+    ws3.Range(ws3.Cells(baseRow, 1), ws3.Cells(baseRow + 6, 1)).Font.Bold = True
+    ws3.Range(ws3.Cells(baseRow, 1), ws3.Cells(baseRow + 6, 1)).Interior.Color = RGB(240, 240, 240)
+
+    Dim outC As Long: outC = startCol
+    Dim r As Long
+    
+    ' [Fix] Start Loop from 15 (Data Row) instead of 14
+    For r = 15 To lastRow
+        Dim itemNameS2 As String: itemNameS2 = Trim$(CStr(ws2.Cells(r, 1).Value))
+        If itemNameS2 = "" Then Exit For
+        
+        Dim pKey As String: pKey = UCase(itemNameS2)
+        
+        Dim groupVal As String
+        If dictP2G.exists(pKey) Then
+            groupVal = dictP2G(pKey)
+        Else
+            groupVal = "未定義群組"
+        End If
+        ws3.Cells(baseRow, outC).Value = groupVal
+        
+        ws3.Cells(baseRow + 1, outC).Value = itemNameS2
+
+        Dim avgCTCol As Long: avgCTCol = 2 + productCount * 4
+        Dim totDayCol As Long: totDayCol = avgCTCol + 1
+        Dim eqBeforeCol As Long: eqBeforeCol = avgCTCol + 4
+
+        ws3.Cells(baseRow + 2, outC).Value = ws2.Cells(r, totDayCol).Value
+        
+        Dim eQty As Double: eQty = val(ws2.Cells(r, eqBeforeCol).Value)
+        Dim aCT As Double: aCT = val(ws2.Cells(r, avgCTCol).Value)
+        Dim capVal As Double: capVal = 0
+        If aCT > 0 Then capVal = (eQty * 20 * 3600) / aCT
+        ws3.Cells(baseRow + 3, outC).Value = Application.WorksheetFunction.Round(capVal, 0)
+
+        ws3.Cells(baseRow + 4, outC).Value = 0
+        ws3.Cells(baseRow + 5, outC).Value = 1
+        ws3.Cells(baseRow + 6, outC).Value = ws2.Cells(r, eqBeforeCol).Value
+        
+        outC = outC + 1
+    Next r
+
+    Dim lastCol As Long: lastCol = outC - 1
+
+    If lastCol >= 2 Then
+        BuildMergedCategoryHeader ws3, baseRow, 2, lastCol
+        
+        ws3.Range(ws3.Cells(baseRow + 2, 2), ws3.Cells(baseRow + 2, lastCol)).NumberFormat = "#,##0"
+        ws3.Range(ws3.Cells(baseRow + 3, 2), ws3.Cells(baseRow + 3, lastCol)).NumberFormat = "#,##0"
+        ws3.Range(ws3.Cells(baseRow + 4, 2), ws3.Cells(baseRow + 5, lastCol)).NumberFormat = "0%"
+        ws3.Range(ws3.Cells(baseRow + 6, 2), ws3.Cells(baseRow + 6, lastCol)).NumberFormat = "#,##0"
+        
+        ws3.Range(ws3.Cells(baseRow, 2), ws3.Cells(baseRow + 1, lastCol)).HorizontalAlignment = xlCenter
+        ws3.Range(ws3.Cells(baseRow, 2), ws3.Cells(baseRow + 1, lastCol)).VerticalAlignment = xlCenter
+
+        ws3.Rows(baseRow).RowHeight = 22
+        ws3.Rows(baseRow + 1).RowHeight = 50
+        ws3.Rows(baseRow + 2).RowHeight = 22
+        ws3.Rows(baseRow + 3).RowHeight = 22
+        ws3.Rows(baseRow + 4).RowHeight = 22
+        ws3.Rows(baseRow + 5).RowHeight = 22
+        ws3.Rows(baseRow + 6).RowHeight = 22
+
+        ws3.Columns(1).ColumnWidth = 12
+        Dim c As Long
+        For c = 2 To lastCol
+            ws3.Columns(c).ColumnWidth = 12
+        Next c
+
+        ApplyBorder ws3.Range(ws3.Cells(baseRow, 1), ws3.Cells(baseRow + 6, lastCol))
+    End If
+
+    DeleteButtonIfExists ws3, BTN_S3_SAVE
+    DeleteButtonIfExists ws3, BTN_S3_IMPORT_MAINT
+    DeleteButtonIfExists ws3, BTN_S3_IMPORT_AUTO
+    DeleteButtonIfExists ws3, BTN_S3_CHART
+    DeleteButtonIfExists ws3, BTN_S4_TO_S5
+    DeleteButtonIfExists ws3, BTN_S3_CLEAR_DT ' New
+    
+    Dim anchor As Range: Set anchor = ws3.Range("G2")
+    AddFormButton ws3, BTN_S3_SAVE, "另存新檔 (僅此頁 .xlsx)", "PB_SaveSheet3AsXLSX", anchor.Left, anchor.Top, 220, 26
+    AddFormButton ws3, BTN_S3_IMPORT_MAINT, "匯入MES ER201-維修保養查詢", "PB_S3_ImportMaintenance", anchor.Left, anchor.Top + 32, 220, 26
+    AddFormButton ws3, BTN_S3_IMPORT_AUTO, "匯入MES設備連線資料查詢", "PB_S3_ImportAutoReport", anchor.Left, anchor.Top + 64, 220, 26
+    AddFormButton ws3, BTN_S3_CLEAR_DT, "清除機故資料 (重置0%)", "PB_S3_ClearDownTime", anchor.Left + 240, anchor.Top + 64, 220, 26
+    AddFormButton ws3, BTN_S3_CHART, "產生產能平衡圖", "PB_S3_GenerateBalanceCharts", anchor.Left, anchor.Top + 96, 220, 26
+    AddFormButton ws3, BTN_S4_TO_S5, "產生第5頁 (TP換線)", "PB_GenerateSheet5", anchor.Left, anchor.Top + 128, 220, 26
+
+    SaveSheetHash S3, ComputeSheetHash_Safe(ws3)
+
+    Application.ScreenUpdating = True
+    MsgBox "第3頁已生成 (含圖表功能)。", vbInformation
+    Exit Sub
+
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成第3頁發生錯誤:" & vbCrLf & _
+           "Err " & Err.Number & " - " & Err.Description, vbExclamation
+End Sub
+Public Sub PB_S3_ClearDownTime()
+    On Error GoTo EH
+    Dim ws3 As Worksheet: Set ws3 = ThisWorkbook.Worksheets(S3)
+    
+    ' Find Header Row (Row 14 is hardcoded but let's confirm)
+    ' In S3 Generate, Row 10 is Base.
+    ' Row 14 is "機故比例" (Base+4).
+    
+    Dim lastCol As Long: lastCol = ws3.Cells(14, ws3.Columns.count).End(xlToLeft).Column
+    If lastCol < 2 Then Exit Sub
+    
+    Dim rng As Range: Set rng = ws3.Range(ws3.Cells(14, 2), ws3.Cells(14, lastCol))
+    rng.Value = 0
+    
+    MsgBox "已清除機故資料 (重置為 0%)。", vbInformation
+    Exit Sub
+EH:
+    MsgBox "清除發生錯誤: " & Err.Description, vbExclamation
+End Sub
+Public Sub PB_SaveSheet3AsXLSX(): SaveOneSheetAsXLSX S3: End Sub
+'====================================================
+' Sheet3 Import Maintenance Logic
+'====================================================
+Public Sub PB_S3_ImportMaintenance()
+    On Error GoTo EH
+    
+    ' 1. Check Settings Sheet
+    Dim ws0 As Worksheet
+    On Error Resume Next
+    Set ws0 = ThisWorkbook.Worksheets(S0)
+    On Error GoTo EH
+    
+    If ws0 Is Nothing Then
+        MsgBox "找不到「" & S0 & "」工作表，無法對照製程。", vbExclamation
+        Exit Sub
+    End If
+    
+    Dim ws3 As Worksheet: Set ws3 = ThisWorkbook.Worksheets(S3)
+    
+    ' 2. Select File
+    Dim f As Variant
+    f = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "選擇維修保養紀錄")
+    If f = False Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    
+    ' 3. Read Settings (00_設定)
+    ' Dictionary: Key=EquipID (UCase), Value=ProcessName
+    ' Dictionary: Key=ProcessName, Value=EquipCount
+    Dim dictEquip As Object: Set dictEquip = CreateObject("Scripting.Dictionary")
+    Dim dictProcCount As Object: Set dictProcCount = CreateObject("Scripting.Dictionary")
+    
+    Dim lastRow0 As Long: lastRow0 = ws0.Cells(ws0.Rows.count, 1).End(xlUp).Row
+    Dim r0 As Long, c0 As Long
+    For r0 = 4 To lastRow0 ' A3=Header, A4 start
+        Dim procName As String: procName = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        If procName <> "" Then
+            Dim lastCol0 As Long: lastCol0 = ws0.Cells(r0, ws0.Columns.count).End(xlToLeft).Column
+            Dim eCount As Long: eCount = 0
+            For c0 = 3 To lastCol0 ' B to ...
+                Dim eID As String: eID = Trim$(CStr(ws0.Cells(r0, c0).Value))
+                If eID <> "" Then
+                    eCount = eCount + 1
+                    If Not dictEquip.exists(UCase(eID)) Then
+                        dictEquip.Add UCase(eID), procName
+                    End If
+                End If
+            Next c0
+            If dictProcCount.exists(procName) Then
+                dictProcCount(procName) = dictProcCount(procName) + eCount
+            Else
+                dictProcCount.Add procName, eCount
+            End If
+        End If
+    Next r0
+    
+    ' 4. Read Maintenance File
+    Dim wbM As Workbook: Set wbM = Workbooks.Open(CStr(f), ReadOnly:=True)
+    Dim wsM As Worksheet: Set wsM = wbM.Worksheets(1)
+    
+    ' Dictionary: Key=ProcessName, Value=TotalMaintTime
+    Dim dictProcTime As Object: Set dictProcTime = CreateObject("Scripting.Dictionary")
+    
+    Dim lastRowM As Long: lastRowM = wsM.Cells(wsM.Rows.count, 2).End(xlUp).Row
+    Dim rm As Long
+    For rm = 2 To lastRowM
+        ' C=EquipID, G=Type(A-維修...), J=Duration
+        Dim typeStr As String: typeStr = Trim$(CStr(wsM.Cells(rm, 6).Value))
+        If InStr(1, typeStr, "A-維修", vbTextCompare) > 0 Then
+            Dim eqID As String: eqID = UCase(Trim$(CStr(wsM.Cells(rm, 2).Value)))
+            Dim dur As Double: dur = val(wsM.Cells(rm, 9).Value)
+            
+            If dictEquip.exists(eqID) Then
+                Dim pName As String: pName = dictEquip(eqID)
+                If dictProcTime.exists(pName) Then
+                    dictProcTime(pName) = dictProcTime(pName) + dur
+                Else
+                    dictProcTime.Add pName, dur
+                End If
+            End If
+        End If
+    Next rm
+    
+    wbM.Close False
+    
+    ' 5. Calculate and Update Sheet 3
+    ' Formula: Ratio = ((TotalTime / EquipCount) / DailyRunHours) / DaysImported
+    Dim dailyRunHours As Double: dailyRunHours = val(ws0.Range("B2").Value)
+    If dailyRunHours <= 0 Then dailyRunHours = 24
+    
+    Dim daysImported As Double: daysImported = val(ws3.Range("B2").Value)
+    If daysImported <= 0 Then daysImported = 1
+    
+    Dim lastCol3 As Long: lastCol3 = ws3.Cells(11, ws3.Columns.count).End(xlToLeft).Column
+    Dim c3 As Long
+    Dim updateCount As Long: updateCount = 0
+    
+    For c3 = 2 To lastCol3
+        Dim s3Name As String: s3Name = Trim$(CStr(ws3.Cells(11, c3).Value))
+        If dictProcTime.exists(s3Name) And dictProcCount.exists(s3Name) Then
+            Dim totalTime As Double: totalTime = dictProcTime(s3Name)
+            Dim totalEquip As Long: totalEquip = dictProcCount(s3Name)
+            
+            If totalEquip > 0 Then
+                Dim avgTimePerEq As Double: avgTimePerEq = totalTime / totalEquip
+                Dim downRatio As Double: downRatio = (avgTimePerEq / dailyRunHours) / daysImported
+                
+                ws3.Cells(14, c3).Value = downRatio ' Row 14
+                updateCount = updateCount + 1
+            End If
+        End If
+    Next c3
+    
+    Application.ScreenUpdating = True
+    MsgBox "維修紀錄匯入完成！已更新 " & updateCount & " 個製程的機故比例。", vbInformation
+    Exit Sub
+    
+EH:
+    If Not wbM Is Nothing Then wbM.Close False
+    Application.ScreenUpdating = True
+    MsgBox "匯入維修紀錄發生錯誤: " & Err.Description, vbExclamation
+End Sub
+'====================================================
+' Sheet3 Import Auto Report Logic
+'====================================================
+Public Sub PB_S3_ImportAutoReport()
+    On Error GoTo EH
+    
+    ' 1. Check Settings Sheet
+    Dim ws0 As Worksheet
+    On Error Resume Next
+    Set ws0 = ThisWorkbook.Worksheets(S0)
+    On Error GoTo EH
+    
+    If ws0 Is Nothing Then
+        MsgBox "找不到「" & S0 & "」工作表，無法對照製程。", vbExclamation
+        Exit Sub
+    End If
+    
+    Dim ws3 As Worksheet: Set ws3 = ThisWorkbook.Worksheets(S3)
+    
+    ' 2. Select File
+    Dim f As Variant
+    f = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "選擇自動上報資料")
+    If f = False Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    
+    ' 3. Read Settings (00_設定) & Work Hours
+    ' Dictionary: Key=EquipID (UCase), Value=ProcessName
+    ' Dictionary: Key=ProcessName, Value=EquipCount
+    Dim dictEquip As Object: Set dictEquip = CreateObject("Scripting.Dictionary")
+    Dim dictProcCount As Object: Set dictProcCount = CreateObject("Scripting.Dictionary")
+    
+    Dim workHoursBase As Double: workHoursBase = val(ws0.Range("B2").Value)
+    If workHoursBase <= 0 Then workHoursBase = 24
+    
+    Dim lastRow0 As Long: lastRow0 = ws0.Cells(ws0.Rows.count, 1).End(xlUp).Row
+    Dim r0 As Long, c0 As Long
+    For r0 = 4 To lastRow0
+        Dim procName As String: procName = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        If procName <> "" Then
+            Dim lastCol0 As Long: lastCol0 = ws0.Cells(r0, ws0.Columns.count).End(xlToLeft).Column
+            Dim eCount As Long: eCount = 0
+            For c0 = 3 To lastCol0
+                Dim eID As String: eID = Trim$(CStr(ws0.Cells(r0, c0).Value))
+                If eID <> "" Then
+                    eCount = eCount + 1
+                    If Not dictEquip.exists(UCase(eID)) Then
+                        dictEquip.Add UCase(eID), procName
+                    End If
+                End If
+            Next c0
+            If dictProcCount.exists(procName) Then
+                dictProcCount(procName) = dictProcCount(procName) + eCount
+            Else
+                dictProcCount.Add procName, eCount
+            End If
+        End If
+    Next r0
+    
+    ' 4. Read Auto Report File
+    Dim wbA As Workbook: Set wbA = Workbooks.Open(CStr(f), ReadOnly:=True)
+    Dim wsA As Worksheet: Set wsA = wbA.Worksheets(1)
+    
+    ' Dictionary: Key=ProcessName, Value=TotalAutoDownTime(Hours)
+    Dim dictProcSum As Object: Set dictProcSum = CreateObject("Scripting.Dictionary")
+    
+    Dim lastRowA As Long: lastRowA = wsA.Cells(wsA.Rows.count, 2).End(xlUp).Row
+    Dim rA As Long
+    For rA = 2 To lastRowA
+        ' B=EquipID, G=StartTime, H=EndTime
+        Dim eqID_A As String: eqID_A = UCase(Trim$(CStr(wsA.Cells(rA, 2).Value)))
+        
+        If dictEquip.exists(eqID_A) Then
+            Dim startT As Double: startT = CDbl(wsA.Cells(rA, 7).Value)
+            Dim endT As Double: endT = CDbl(wsA.Cells(rA, 8).Value)
+            
+            Dim duration As Double: duration = 0
+            If endT > startT Then
+                duration = (endT - startT) * 24 ' Convert Excel days to Hours
+            End If
+            
+            If duration > 0 Then
+                Dim pName_A As String: pName_A = dictEquip(eqID_A)
+                If dictProcSum.exists(pName_A) Then
+                    dictProcSum(pName_A) = dictProcSum(pName_A) + duration
+                Else
+                    dictProcSum.Add pName_A, duration
+                End If
+            End If
+        End If
+    Next rA
+    
+    wbA.Close False
+    
+    ' 5. Calculate and Update Sheet 3
+    ' Formula: Ratio = ((TotalDownTime / ProcessEquipCount) / WorkHoursBase) / DaysImported
+    Dim daysImported As Double: daysImported = val(ws3.Range("B2").Value)
+    If daysImported <= 0 Then daysImported = 1
+    
+    Dim lastCol3 As Long: lastCol3 = ws3.Cells(11, ws3.Columns.count).End(xlToLeft).Column
+    Dim c3 As Long
+    Dim updateCount As Long: updateCount = 0
+    
+    For c3 = 2 To lastCol3
+        Dim s3Name As String: s3Name = Trim$(CStr(ws3.Cells(11, c3).Value))
+        
+        ' Check if we have data for this process from the Auto Report
+        If dictProcSum.exists(s3Name) And dictProcCount.exists(s3Name) Then
+            Dim totalDT As Double: totalDT = dictProcSum(s3Name)
+            Dim procEqCount As Long: procEqCount = dictProcCount(s3Name)
+            
+            If procEqCount > 0 Then
+                Dim avgDT As Double: avgDT = totalDT / procEqCount
+                Dim ratio As Double: ratio = (avgDT / workHoursBase) / daysImported
+                
+                ws3.Cells(14, c3).Value = ratio ' Row 14: 機故比例
+                updateCount = updateCount + 1
+            End If
+        End If
+    Next c3
+    
+    Application.ScreenUpdating = True
+    MsgBox "自動上報資料匯入完成！已更新 " & updateCount & " 個製程的機故比例。", vbInformation
+    Exit Sub
+    
+EH:
+    If Not wbA Is Nothing Then wbA.Close False
+    Application.ScreenUpdating = True
+    MsgBox "匯入自動上報資料發生錯誤: " & Err.Description, vbExclamation
+End Sub
+
+'====================================================
+' Sheet3 Generate Balance Charts (Updated v4.8.4)
+'====================================================
+Public Sub PB_S3_GenerateBalanceCharts()
+    On Error GoTo EH
+    
+    Dim ws0 As Worksheet, ws3 As Worksheet
+    On Error Resume Next
+    Set ws0 = ThisWorkbook.Worksheets(S0)
+    Set ws3 = ThisWorkbook.Worksheets(S3)
+    On Error GoTo EH
+    
+    If ws0 Is Nothing Then MsgBox "找不到 " & S0, vbExclamation: Exit Sub
+    If ws3 Is Nothing Then MsgBox "找不到 " & S3, vbExclamation: Exit Sub
+    
+    ws3.Activate
+    Application.ScreenUpdating = False
+    
+    ' 讀取資料天數
+    Dim dataDays As Double
+    dataDays = val(ws3.Range("B2").Value)
+    If dataDays <= 0 Then dataDays = 1 ' 防呆
+    
+    ' [更新]：決定 Y 軸最大值邏輯改為 資料天數 * 1000
+    Dim yMax As Double
+    yMax = dataDays * 1000
+    
+    ' 1. Delete Existing Charts
+    DeleteAllCharts ws3
+    
+    ' 2. Scan S0 to build Group Map
+    Dim dictGroups As Object: Set dictGroups = CreateObject("Scripting.Dictionary")
+    
+    Dim r0 As Long, lastR0 As Long
+    lastR0 = ws0.Cells(ws0.Rows.count, 1).End(xlUp).Row
+    
+    For r0 = 4 To lastR0
+        Dim gName As String: gName = Trim$(CStr(ws0.Cells(r0, 1).Value))
+        Dim pName As String: pName = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        
+        If gName <> "" And pName <> "" Then
+            If Not dictGroups.exists(gName) Then
+                dictGroups.Add gName, CreateObject("Scripting.Dictionary")
+            End If
+            If Not dictGroups(gName).exists(pName) Then
+                dictGroups(gName).Add pName, 0
+            End If
+        End If
+    Next r0
+    
+    ' 3. Map S3 Columns
+    Dim dictS3Cols As Object: Set dictS3Cols = CreateObject("Scripting.Dictionary")
+    Dim lastC3 As Long: lastC3 = ws3.Cells(11, ws3.Columns.count).End(xlToLeft).Column
+    Dim c3 As Long
+    
+    For c3 = 2 To lastC3
+        Dim s3Name As String: s3Name = Trim$(CStr(ws3.Cells(11, c3).Value))
+        If s3Name <> "" And Not dictS3Cols.exists(s3Name) Then
+            dictS3Cols.Add s3Name, c3
+        End If
+    Next c3
+    
+    ' 4. Create Charts
+    Dim allGroups As Variant: allGroups = dictGroups.keys
+    If UBound(allGroups) < 0 Then
+        MsgBox "設定頁面(00)無資料。", vbExclamation
+        Exit Sub
+    End If
+    
+    Dim sortedGroups() As String
+    ReDim sortedGroups(0 To UBound(allGroups))
+    Dim idx As Long: idx = 0
+    
+    ' Pass 1: Shared
+    Dim gKey As Variant
+    For Each gKey In allGroups
+        If InStr(1, gKey, "共用", vbTextCompare) > 0 Or InStr(1, gKey, "Shared", vbTextCompare) > 0 Then
+            sortedGroups(idx) = gKey
+            idx = idx + 1
+        End If
+    Next gKey
+    
+    ' Pass 2: Others
+    For Each gKey In allGroups
+        Dim isShared As Boolean
+        isShared = (InStr(1, gKey, "共用", vbTextCompare) > 0 Or InStr(1, gKey, "Shared", vbTextCompare) > 0)
+        If Not isShared Then
+            sortedGroups(idx) = gKey
+            idx = idx + 1
+        End If
+    Next gKey
+    
+    Dim chartTop As Double: chartTop = 250 + (8 * 20)
+    Dim chartHeight As Double: chartHeight = 300
+    Dim chartWidth As Double: chartWidth = 600
+    Dim i As Long
+    
+    For i = 0 To UBound(sortedGroups)
+        Dim currentGroup As String: currentGroup = sortedGroups(i)
+        If currentGroup <> "" Then
+            Dim procDict As Object: Set procDict = dictGroups(currentGroup)
+            Dim procList As Variant: procList = procDict.keys
+            
+            Dim count As Long: count = 0
+            Dim j As Long
+            For j = 0 To UBound(procList)
+                If dictS3Cols.exists(procList(j)) Then count = count + 1
+            Next j
+            
+            If count > 0 Then
+                Dim arrX() As String: ReDim arrX(1 To count)
+                Dim arrGray() As Double: ReDim arrGray(1 To count)
+                Dim arrRed() As Double: ReDim arrRed(1 To count)
+                Dim arrYel() As Double: ReDim arrYel(1 To count)
+                Dim arrLine() As Double: ReDim arrLine(1 To count)
+                
+                Dim k As Long: k = 1
+                For j = 0 To UBound(procList)
+                    Dim pN As String: pN = procList(j)
+                    If dictS3Cols.exists(pN) Then
+                        Dim col As Long: col = dictS3Cols(pN)
+                        
+                        arrX(k) = pN
+                        
+                        ' 讀取值並乘以資料天數
+                        Dim valTarget As Double: valTarget = val(ws3.Cells(12, col).Value) * dataDays
+                        Dim valCap As Double: valCap = val(ws3.Cells(13, col).Value) * dataDays
+                        
+                        Dim valDown As Double: valDown = val(ws3.Cells(14, col).Value)
+                        Dim valSpeed As Double: valSpeed = val(ws3.Cells(15, col).Value)
+                        
+                        ' Logic
+                        Dim vRed As Double: vRed = Application.WorksheetFunction.Round(valCap * valDown, 0)
+                        Dim remain As Double: remain = valCap - vRed
+                        Dim vGray As Double: vGray = Application.WorksheetFunction.Round(remain * valSpeed, 0)
+                        Dim vYel As Double: vYel = Application.WorksheetFunction.Round(remain * (1 - valSpeed), 0)
+                        
+                        arrGray(k) = vGray
+                        arrRed(k) = vRed
+                        arrYel(k) = vYel
+                        arrLine(k) = Application.WorksheetFunction.Round(valTarget, 0)
+                        
+                        k = k + 1
+                    End If
+                Next j
+                
+                ' Generate Chart
+                Dim chObj As ChartObject
+                Set chObj = ws3.ChartObjects.Add(Left:=50, Top:=chartTop, width:=chartWidth, height:=chartHeight)
+                chartTop = chartTop + chartHeight + 20
+                
+                With chObj.Chart
+                    .ChartType = xlColumnStacked
+                    .HasTitle = True
+                    .ChartTitle.Text = currentGroup & "設備 - 產能平衡圖"
+                    .HasLegend = True
+                    
+                    Do While .SeriesCollection.count > 0
+                        .SeriesCollection(1).Delete
+                    Loop
+                    
+                    With .SeriesCollection.NewSeries
+                        .name = "有效產能"
+                        .XValues = arrX
+                        .Values = arrGray
+                        .ChartType = xlColumnStacked
+                        .Format.Fill.ForeColor.RGB = RGB(192, 192, 192)
+                        .HasDataLabels = True
+                    End With
+                    
+                    With .SeriesCollection.NewSeries
+                        .name = "產速損失"
+                        .Values = arrYel
+                        .ChartType = xlColumnStacked
+                        .Format.Fill.ForeColor.RGB = RGB(255, 255, 0)
+                        .HasDataLabels = True
+                    End With
+                    
+                    With .SeriesCollection.NewSeries
+                        .name = "機故損失"
+                        .Values = arrRed
+                        .ChartType = xlColumnStacked
+                        .Format.Fill.ForeColor.RGB = RGB(255, 0, 0)
+                        .HasDataLabels = True
+                    End With
+                    
+                    With .SeriesCollection.NewSeries
+                        .name = "目標產能"
+                        .Values = arrLine
+                        .ChartType = xlLine
+                        .Format.Line.ForeColor.RGB = RGB(0, 176, 240)
+                        .Format.Line.DashStyle = msoLineDash
+                        .Format.Line.Weight = 2
+                        .HasDataLabels = False
+                    End With
+                    
+                    ' 設定 Y 軸最大值
+                    With .Axes(xlValue)
+                        .MinimumScale = 0
+                        .MaximumScale = yMax
+                        .MajorGridlines.Format.Line.Transparency = 1
+                    End With
+                    
+                    ' v4.17.8: Label Position InsideBase if > yMax
+                    Dim serEff As Series
+                    Set serEff = .SeriesCollection(1)
+                    Dim ptIdx As Long
+                    For ptIdx = 1 To serEff.Points.count
+                        If arrGray(ptIdx) > yMax Then
+                            serEff.Points(ptIdx).DataLabel.Position = xlLabelPositionInsideBase
+                        End If
+                    Next ptIdx
+                    
+                End With
+            End If
+        End If
+    Next i
+    
+    Application.ScreenUpdating = True
+    MsgBox "產能平衡圖已生成 (" & (i) & " 類)。" & vbCrLf & _
+           "資料天數：" & dataDays & "，Y軸最大值：" & yMax, vbInformation
+    Exit Sub
+    
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "產生圖表錯誤: " & Err.Description, vbExclamation
+End Sub
+
+
+
+'====================================================
+' ?Sheet4 Generate
+'====================================================
+Public Sub PB_GenerateSheet4()
+    On Error GoTo EH
+    EnsureBaseSheets
+
+    Dim ws2 As Worksheet, ws4 As Worksheet
+    Set ws2 = ThisWorkbook.Worksheets(S2)
+    Set ws4 = ThisWorkbook.Worksheets(S4)
+
+    Application.ScreenUpdating = False
+    PB_ClearSheet ws4
+
+    Dim hashOld As String, hashNow As String
+    hashOld = GetSheetHash(S2)
+    hashNow = ComputeSheetHash_Safe(ws2)
+    If hashOld <> "" And hashOld <> hashNow Then
+        If MsgBox("第2頁內容看起來已被修改，可能與匯入資料不同。" & vbCrLf & _
+                  "仍要繼續生成第4頁嗎？", vbExclamation + vbYesNo) = vbNo Then
+            Application.ScreenUpdating = True
+            Exit Sub
+        End If
+    End If
+
+    ws4.Range("A1").Value = "產能平衡圖 - 第4頁（Before / Now / Future）"
+    ws4.Range("A1:H1").Merge
+    ws4.Range("A1").Font.Bold = True
+    ws4.Range("A1").Font.Size = 16
+    ws4.Rows(1).RowHeight = 26
+
+    Dim productCount As Long: productCount = DetectProductCountFromSheet2(ws2)
+
+    Dim blockNames As Variant
+    blockNames = Array("Before", "Now", "Future")
+
+    Dim i As Long, startRow As Long
+    startRow = 3
+
+    For i = 0 To 2
+        startRow = BuildOneS4Block(ws4, ws2, productCount, CStr(blockNames(i)), startRow)
+        startRow = startRow + 10
+    Next i
+
+    DeleteButtonIfExists ws4, BTN_S4_SAVE
+    DeleteButtonIfExists ws4, BTN_S4_TO_S5
+    DeleteButtonIfExists ws4, BTN_S4_TO_S7
+    
+    Dim anchor As Range: Set anchor = ws4.Range("G2")
+    AddFormButton ws4, BTN_S4_SAVE, "另存新檔（此分頁 .xlsx）", "PB_SaveSheet4AsXLSX", anchor.Left, anchor.Top, 220, 26
+    AddFormButton ws4, BTN_S4_TO_S7, "產生第7頁 (B_N_F)", "PB_GenerateSheet7", anchor.Left, anchor.Top + 32, 220, 26
+
+    SaveSheetHash S4, ComputeSheetHash_Safe(ws4)
+
+    Application.ScreenUpdating = True
+    MsgBox "第4頁已生成。", vbInformation
+    Exit Sub
+
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成第4頁發生錯誤:" & vbCrLf & _
+           "Err " & Err.Number & " - " & Err.Description, vbExclamation
+End Sub
+
+Public Sub PB_SaveSheet4AsXLSX(): SaveOneSheetAsXLSX S4: End Sub
+
+'====================================================
+' BuildOneS4Block
+'====================================================
+Private Function BuildOneS4Block(ByVal ws4 As Worksheet, ByVal ws2 As Worksheet, ByVal productCount As Long, ByVal blockTitle As String, ByVal topRow As Long) As Long
+    Dim r As Long: r = topRow
+
+    ws4.Cells(r, 1).Value = blockTitle
+    ws4.Cells(r, 1).Font.Bold = True
+    ws4.Cells(r, 1).Font.Size = 14
+    r = r + 1
+
+    ws4.Cells(r, 1).Value = blockTitle
+    ws4.Cells(r, 2).Value = "產量"
+    ws4.Cells(r, 3).Value = "良率"
+    ws4.Cells(r, 4).Value = "Pcs/Lot"
+    ws4.Cells(r, 5).Value = "每日需求 LOT"
+    ws4.Range(ws4.Cells(r, 1), ws4.Cells(r, 5)).Font.Bold = True
+    ws4.Range(ws4.Cells(r, 1), ws4.Cells(r, 5)).Interior.Color = RGB(235, 235, 235)
+
+    Dim rr As Long: rr = r + 1
+    Dim p As Long
+    For p = 1 To productCount
+        ws4.Cells(rr, 1).Value = ws2.Cells(3, 1 + p).Value
+        ws4.Cells(rr, 2).Value = ws2.Cells(4, 1 + p).Value
+        ws4.Cells(rr, 3).Value = 1
+        ws4.Cells(rr, 4).Formula = "=" & ws2.Cells(5, 1 + p).Address(True, True, xlA1, True) & "/" & ws2.Cells(6, 1 + p).Address(True, True, xlA1, True)
+        
+        ' v4.17.7: Update E column to link with C column (Yield) with same relationship as S2!B11 and S2!B7
+        ' Formula Logic: CEILING( (CEILING((Need/PcsPerSht)/Yield, 1) / Days) / LotSize, 1 )
+        Dim addrB4 As String: addrB4 = ws2.Cells(4, 1 + p).Address(True, True, xlA1, True) ' Demand
+        Dim addrB5 As String: addrB5 = ws2.Cells(5, 1 + p).Address(True, True, xlA1, True) ' Pcs/Sht
+        Dim addrB6 As String: addrB6 = ws2.Cells(6, 1 + p).Address(True, True, xlA1, True) ' LotSize
+        Dim addrB9 As String: addrB9 = ws2.Cells(9, 1 + p).Address(True, True, xlA1, True) ' Days
+        Dim addrS4Yield As String: addrS4Yield = ws4.Cells(rr, 3).Address(False, False)     ' S4 Yield (C5, C6 etc.)
+        
+        ws4.Cells(rr, 5).Formula = "=IFERROR(CEILING((CEILING((" & addrB4 & "/" & addrB5 & ")/" & addrS4Yield & ",1)/" & addrB9 & ")/" & addrB6 & ",1),0)"
+        
+        rr = rr + 1
+    Next p
+
+    ws4.Cells(rr, 1).Value = "生產天數"
+    ws4.Cells(rr, 2).Value = ws2.Cells(8, 2).Value
+    rr = rr + 1
+    
+    ws4.Cells(rr, 1).Value = "生產時數"
+    ws4.Cells(rr, 2).Value = ws2.Cells(7, 2).Value
+    Dim hourAddr As String: hourAddr = ws4.Cells(rr, 2).Address(True, True)
+
+    ws4.Range(ws4.Cells(r + 1, 2), ws4.Cells(rr, 5)).NumberFormat = "#,##0"
+    ws4.Range(ws4.Cells(r + 1, 3), ws4.Cells(r + productCount, 3)).NumberFormat = "0%"
+    ApplyBorder ws4.Range(ws4.Cells(r, 1), ws4.Cells(rr, 5))
+
+    '--- 平衡率 (放在每日需求LOT右邊) ---
+    Dim balanceCol As Long: balanceCol = 6
+    ws4.Cells(r, balanceCol).Value = "平衡率"
+    ws4.Cells(r, balanceCol).Font.Bold = True
+    ws4.Cells(r, balanceCol).Interior.Color = RGB(235, 235, 235)
+
+    '--- 複製第2頁大表 ---
+    Dim srcTop As Long: srcTop = ws2.Range(S2_TABLE2_TOP).Row
+    Dim lastRow2 As Long: lastRow2 = ws2.Cells(ws2.Rows.count, 1).End(xlUp).Row
+    Dim lastCol2 As Long: lastCol2 = ws2.Cells(srcTop + 1, ws2.Columns.count).End(xlToLeft).Column
+
+    Dim destTop As Long: destTop = rr + 4
+    Dim srcRng As Range
+    Set srcRng = ws2.Range(ws2.Cells(srcTop, 1), ws2.Cells(lastRow2, lastCol2))
+
+    srcRng.Copy
+    ws4.Cells(destTop, 1).PasteSpecial xlPasteAll
+    Application.CutCopyMode = False
+
+    Dim destRng As Range
+    Set destRng = ws4.Range(ws4.Cells(destTop, 1), ws4.Cells(destTop + (lastRow2 - srcTop), lastCol2))
+    ' Fix: Correctly specify empty string for replacement
+    destRng.Replace What:="'" & ws2.name & "'!", Replacement:="", LookAt:=xlPart
+    destRng.Replace What:=ws2.name & "!", Replacement:="", LookAt:=xlPart
+
+    '--- 大表資料範圍 (去除標題) ---
+    Dim dataStart As Long: dataStart = destTop + 2
+    Dim dataEnd As Long: dataEnd = destTop + (lastRow2 - srcTop)
+
+    '--- 找 AvgCT 欄 ---
+    Dim hdrRow As Long: hdrRow = destTop + 1
+    Dim avgCTCol As Long: avgCTCol = FindHeaderColInRow(ws4, hdrRow, "平均 C/T")
+    If avgCTCol = 0 Then avgCTCol = 2 + productCount * 4
+
+    '--- 建立 PB_Group 輔助欄 ---
+    Dim groupCol As Long: groupCol = lastCol2 + 1
+    ws4.Cells(hdrRow, groupCol).Value = "PB_Group"
+    ws4.Cells(hdrRow, groupCol).Font.Bold = True
+    ws4.Cells(hdrRow, groupCol).Interior.Color = RGB(220, 220, 220)
+
+    Dim rowi As Long
+    For rowi = dataStart To dataEnd
+        ' Fix: Escape quotes for empty string in IFERROR -> """"
+        ws4.Cells(rowi, groupCol).Formula = "=IFERROR(INDEX(" & SD & "!$A$7:$A$999, MATCH(" & ws4.Cells(rowi, 1).Address(False, False) & "," & SD & "!$B$7:$B$999,0)),"""")"
+    Next rowi
+
+    '--- 修正大表公式：連結至 S4 上方小表之 E 欄與 B8 ---
+    Dim needEqCol As Long: needEqCol = avgCTCol + 3
+    Dim timeDayCol As Long: timeDayCol = avgCTCol + 2
+
+    For p = 1 To productCount
+        ' v4.8.6 Fix: Correct Offset for Daily Demand Lot (Col D)
+        ' Start(2) + (p-1)*4 -> Base Col (B for p1)
+        ' B(0), C(1), D(2), E(3)
+        ' DailyLot is D, so offset is +2
+        Dim dayLotCol As Long: dayLotCol = 2 + (p - 1) * 4 + 2
+        
+        Dim smallLotAddr As String: smallLotAddr = ws4.Cells(r + p, 5).Address(True, True) ' E5, E6
+        For rowi = dataStart To dataEnd
+            ws4.Cells(rowi, dayLotCol).Formula = "=" & smallLotAddr
+        Next rowi
+    Next p
+    
+    ' 需求台數公式指向 S4 的生產時數 ($B$8)
+    For rowi = dataStart To dataEnd
+        ws4.Cells(rowi, needEqCol).Formula = "=IFERROR(" & ws4.Cells(rowi, timeDayCol).Address(False, False) & "/" & hourAddr & ",0)"
+    Next rowi
+
+    '--- 平衡率計算 ---
+    Dim avgRng As Range, grpRng As Range
+    Set avgRng = ws4.Range(ws4.Cells(dataStart, avgCTCol), ws4.Cells(dataEnd, avgCTCol))
+    Set grpRng = ws4.Range(ws4.Cells(dataStart, groupCol), ws4.Cells(dataEnd, groupCol))
+
+    Dim sumAll As String, maxAll As String, allStations As String
+    sumAll = "SUM(" & avgRng.Address(False, False) & ")"
+    maxAll = "MAX(" & avgRng.Address(False, False) & ")"
+    allStations = "(" & SD & "!$B$5+SUM(" & SD & "!$E$2:$E$200))"
+
+    For p = 1 To productCount
+        Dim dediCount As String
+        dediCount = "IFERROR(VLOOKUP(" & p & "," & SD & "!$D$2:$E$200,2,FALSE),0)"
+        ' Fix: Escape quotes for "DEDICATED|" -> ""DEDICATED|""
+        ws4.Cells(r + p, balanceCol).Formula = _
+            "=IFERROR(" & _
+                "SUMIF(" & grpRng.Address(False, False) & ",""DEDICATED|""&" & ws4.Cells(r + p, 1).Address(False, False) & "," & avgRng.Address(False, False) & ")" & _
+                "/(" & _
+                    "MAXIFS(" & avgRng.Address(False, False) & "," & grpRng.Address(False, False) & ",""DEDICATED|""&" & ws4.Cells(r + p, 1).Address(False, False) & ")" & _
+                    "*(" & dediCount & ")" & _
+                ")" & _
+            ",0)"
+    Next p
+
+    ws4.Cells(rr + 1, 1).Value = "總設備平衡率"
+    ws4.Cells(rr + 2, 1).Value = "共用設備平衡率"
+    ws4.Cells(rr + 1, balanceCol).Formula = "=IFERROR((" & sumAll & ")/((" & maxAll & ")*" & allStations & "),0)"
+    ' Fix: Escape quotes for "SHARED" -> ""SHARED""
+    ws4.Cells(rr + 2, balanceCol).Formula = "=IFERROR(SUMIF(" & grpRng.Address(False, False) & ",""SHARED""," & avgRng.Address(False, False) & ")/(MAXIFS(" & avgRng.Address(False, False) & "," & grpRng.Address(False, False) & ",""SHARED"")*(" & SD & "!$B$5)),0)"
+
+    ws4.Range(ws4.Cells(r + 1, balanceCol), ws4.Cells(r + productCount, balanceCol)).NumberFormat = "0.00%"
+    ws4.Cells(rr + 1, balanceCol).NumberFormat = "0.00%"
+    ws4.Cells(rr + 2, balanceCol).NumberFormat = "0.00%"
+
+    ApplyBorder ws4.Range(ws4.Cells(destTop, 1), ws4.Cells(dataEnd, lastCol2 + 1))
+    BuildOneS4Block = dataEnd
+End Function
+
+'====================================================
+' Utilities
+'====================================================
+Private Sub BuildMergedCategoryHeader(ByVal ws As Worksheet, ByVal categoryRow As Long, ByVal startCol As Long, ByVal lastCol As Long)
+    Dim c As Long, cStart As Long
+    c = startCol
+    Do While c <= lastCol
+        Dim v As String: v = CStr(ws.Cells(categoryRow, c).Value)
+        cStart = c
+        Do While c <= lastCol And CStr(ws.Cells(categoryRow, c).Value) = v
+            c = c + 1
+        Loop
+        If c - cStart >= 2 Then
+            ws.Range(ws.Cells(categoryRow, cStart), ws.Cells(categoryRow, c - 1)).Merge
+        End If
+        ws.Range(ws.Cells(categoryRow, cStart), ws.Cells(categoryRow, c - 1)).HorizontalAlignment = xlCenter
+        ws.Range(ws.Cells(categoryRow, cStart), ws.Cells(categoryRow, c - 1)).VerticalAlignment = xlCenter
+        ws.Range(ws.Cells(categoryRow, cStart), ws.Cells(categoryRow, c - 1)).Interior.Color = RGB(230, 230, 230)
+        ws.Range(ws.Cells(categoryRow, cStart), ws.Cells(categoryRow, c - 1)).Font.Bold = True
+    Loop
+End Sub
+
+'====================================================
+' Sheet 5 Logic
+'====================================================
+Public Sub PB_GenerateSheet5()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim ws1 As Worksheet: Set ws1 = ThisWorkbook.Worksheets(S1)
+    Dim ws5 As Worksheet: Set ws5 = ThisWorkbook.Worksheets(S5)
+    Application.ScreenUpdating = False
+    
+    ws5.Cells.Clear
+    ws5.Cells.Font.name = "Microsoft JhengHei"
+    ws5.Cells.Font.Size = 11
+    
+    ' 標題 (保留原樣)
+    With ws5.Range("A1:H1")
+        .Merge
+        .Value = "產能平衡圖 - 第5頁 (目標片次 & 設備能力 - 含TP換線)"
+        .Font.Bold = True
+        .Font.Size = 16
+        .RowHeight = 26
+    End With
+    
+    ' 輸入參數區 (保留原樣)
+    ws5.Cells(2, 1).Value = "產品名稱"
+    ws5.Cells(2, 2).Value = "uPOL-TP"
+    ws5.Cells(2, 3).Value = "uBMU-TP"
+    
+    ws5.Cells(3, 1).Value = "一片幾顆"
+    ws5.Cells(3, 2).Value = ws1.Cells(8, 2).Value ' Default
+    ws5.Cells(3, 3).Value = ws1.Cells(8, 3).Value ' Default
+    
+    ws5.Range("A2:C3").Borders.LineStyle = xlContinuous
+    ws5.Range("A2:A3").Font.Bold = True
+    ws5.Range("A2:A3").Interior.Color = RGB(240, 240, 240)
+    
+    ' 按鈕區
+    DeleteButtonIfExists ws5, BTN_S5_IMPORT
+    DeleteButtonIfExists ws5, BTN_S5_CALC
+    DeleteButtonIfExists ws5, BTN_S5_SAVE
+    DeleteButtonIfExists ws5, BTN_S5_TO_S6
+    
+    Dim anchor As Range: Set anchor = ws5.Range("G2")
+    AddFormButton ws5, BTN_S5_IMPORT, "匯入TP換線統計資料 (A,G,H,I,J)", "PB_S5_ImportTPFile", anchor.Left, anchor.Top, 220, 26
+    AddFormButton ws5, BTN_S5_CALC, "計算換線 (Calculate)", "PB_S5_CalculateChangeover", anchor.Left, anchor.Top + 32, 220, 26
+    AddFormButton ws5, BTN_S5_SAVE, "另存新檔 (.xlsx)", "PB_SaveSheet5AsXLSX", anchor.Left, anchor.Top + 64, 220, 26
+    AddFormButton ws5, BTN_S5_TO_S6, "產生第6頁 (日圖表)", "PB_GenerateSheet6", anchor.Left, anchor.Top + 96, 220, 26
+    
+    ' 產能計算結果區 (Summary) -> 移動至 A9
+    ws5.Range("A9").Value = "換線後預估結果："
+    ws5.Range("A9").Font.Bold = True
+    
+    ' 設定列表標題 (A15 & L15)
+    Dim rHeader As Long: rHeader = 15
+    
+    ' 左側：目前機台狀態
+    ws5.Cells(rHeader, 1).Value = "目前機台狀態"
+    ws5.Range(ws5.Cells(rHeader, 1), ws5.Cells(rHeader, 4)).Merge
+    ws5.Range(ws5.Cells(rHeader, 1), ws5.Cells(rHeader, 4)).HorizontalAlignment = xlCenter
+    ws5.Range(ws5.Cells(rHeader, 1), ws5.Cells(rHeader, 4)).Interior.Color = RGB(220, 220, 220)
+    
+    ws5.Cells(rHeader + 1, 1).Value = "機台"
+    ws5.Cells(rHeader + 1, 2).Value = "目前產品"
+    ws5.Cells(rHeader + 1, 3).Value = "目前產能"
+    ws5.Cells(rHeader + 1, 4).Value = "換線決策"
+    ws5.Range("A16:D16").Font.Bold = True
+    ws5.Range("A16:D16").Interior.Color = RGB(240, 240, 240)
+    
+    ' 右側：換線後機台狀態
+    ws5.Cells(rHeader, 12).Value = "換線後機台狀態"
+    ws5.Range(ws5.Cells(rHeader, 12), ws5.Cells(rHeader, 14)).Merge
+    ws5.Range(ws5.Cells(rHeader, 12), ws5.Cells(rHeader, 14)).HorizontalAlignment = xlCenter
+    ws5.Range(ws5.Cells(rHeader, 12), ws5.Cells(rHeader, 14)).Interior.Color = RGB(220, 220, 220)
+    
+    ws5.Cells(rHeader + 1, 12).Value = "機台"
+    ws5.Cells(rHeader + 1, 13).Value = "分配產品"
+    ws5.Cells(rHeader + 1, 14).Value = "預估產能"
+    ws5.Range("L16:N16").Font.Bold = True
+    ws5.Range("L16:N16").Interior.Color = RGB(240, 240, 240)
+    
+    Application.ScreenUpdating = True
+    MsgBox "第5頁已初始化 (v4.10.0)。請匯入TP換線統計資料。", vbInformation
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成第5頁發生錯誤:" & vbCrLf & Err.Description, vbExclamation
+End Sub
+
+Public Sub PB_S5_ImportTPFile()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim ws5 As Worksheet: Set ws5 = ThisWorkbook.Worksheets(S5)
+    
+    Dim f As Variant
+    f = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "選擇TP換線統計資料 (A,G,H,I,J)")
+    If f = False Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    Dim wb As Workbook: Set wb = Workbooks.Open(CStr(f), ReadOnly:=True)
+    Dim wsSrc As Worksheet: Set wsSrc = wb.Worksheets(1)
+    
+    Dim wsdTP As Worksheet: Set wsdTP = GetOrCreateSheet(SD_TP)
+    MakeVeryHidden wsdTP
+    wsdTP.Cells.Clear
+    
+    ' Check columns (A, G, H, I, J)
+    Dim lastR As Long: lastR = wsSrc.Cells(wsSrc.Rows.count, 1).End(xlUp).Row
+    If lastR < 2 Then
+        wb.Close False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "匯入檔案無資料。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' Setup SD_TP Headers
+    wsdTP.Range("A1").Value = "Machine"
+    wsdTP.Range("B1").Value = "Cap_uPOL"
+    wsdTP.Range("C1").Value = "Cap_uBMU"
+    wsdTP.Range("D1").Value = "CurProd"
+    wsdTP.Range("E1").Value = "CanSwitch"
+    
+    Dim r As Long, outR As Long
+    outR = 2
+    
+    ' 清除 S5 舊資料 (Row 17 down)
+    Dim rStart As Long: rStart = 17
+    ws5.Range("A" & rStart & ":D10000").ClearContents
+    ws5.Range("A" & rStart & ":D10000").Validation.Delete
+    ws5.Range("A" & rStart & ":D10000").Borders.LineStyle = xlNone
+    
+    ' 清除 S5 右側舊資料 (Row 17 down)
+    ws5.Range("L" & rStart & ":N10000").ClearContents
+    ws5.Range("L" & rStart & ":N10000").Borders.LineStyle = xlNone
+    
+    ' 統計目前產能的變數
+    Dim sumImportPOL As Double: sumImportPOL = 0
+    Dim sumImportBMU As Double: sumImportBMU = 0
+    
+    For r = 2 To lastR
+        Dim mName As String: mName = Trim$(CStr(wsSrc.Cells(r, 1).Value))
+        If mName <> "" Then
+            Dim cPOL As Double: cPOL = val(wsSrc.Cells(r, 7).Value)
+            Dim cBMU As Double: cBMU = val(wsSrc.Cells(r, 8).Value)
+            Dim curP As String: curP = Trim$(CStr(wsSrc.Cells(r, 9).Value))
+            Dim canSw As String: canSw = Trim$(CStr(wsSrc.Cells(r, 10).Value)) ' J column
+            
+            ' 1. Save to Hidden Sheet
+            wsdTP.Cells(outR, 1).Value = mName
+            wsdTP.Cells(outR, 2).Value = cPOL
+            wsdTP.Cells(outR, 3).Value = cBMU
+            wsdTP.Cells(outR, 4).Value = curP
+            wsdTP.Cells(outR, 5).Value = canSw
+            
+            ' 2. Determine Current Capacity and Sum up
+            Dim curCap As Double: curCap = 0
+            If InStr(1, curP, "uPOL", vbTextCompare) > 0 Then
+                curCap = cPOL
+                sumImportPOL = sumImportPOL + cPOL
+            ElseIf InStr(1, curP, "uBMU", vbTextCompare) > 0 Then
+                curCap = cBMU
+                sumImportBMU = sumImportBMU + cBMU
+            End If
+            
+            ' 3. Write to S5 List (Start A17)
+            Dim rowS5 As Long: rowS5 = rStart + (outR - 2)
+            ws5.Cells(rowS5, 1).Value = mName
+            ws5.Cells(rowS5, 2).Value = curP
+            ws5.Cells(rowS5, 3).Value = curCap
+            
+            ' 4. Switch Decision Dropdown
+            Dim cellDec As Range: Set cellDec = ws5.Cells(rowS5, 4)
+            
+            If UCase(canSw) = "X" Then
+                cellDec.Value = "無法換線"
+                ' No validation, locked text
+                cellDec.Font.Color = RGB(150, 150, 150)
+            Else
+                cellDec.Value = "維持現況"
+                With cellDec.Validation
+                    .Delete
+                    .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Operator:= _
+                    xlBetween, Formula1:="維持現況,換線"
+                    .IgnoreBlank = True
+                    .InCellDropdown = True
+                    .ShowInput = True
+                    .ShowError = True
+                End With
+                cellDec.Font.Color = vbBlack
+            End If
+            
+            outR = outR + 1
+        End If
+    Next r
+    
+    wb.Close False
+    Application.DisplayAlerts = True
+    
+    ' Apply Borders to List A
+    Dim lastRowList As Long: lastRowList = rStart + (outR - 3)
+    If lastRowList >= rStart Then
+        ApplyBorder ws5.Range("A16:D" & lastRowList)
+        ws5.Range("C17:C" & lastRowList).NumberFormat = "#,##0"
+    End If
+    
+    ' 5. Generate Current Status Table at A5
+    ws5.Range("A5:E8").Clear
+    ws5.Range("A5").Value = "目前狀態"
+    ws5.Range("A5").Font.Bold = True
+    
+    ' Headers
+    ws5.Cells(6, 1).Value = "產品"
+    ws5.Cells(6, 2).Value = "目標總產能"
+    ws5.Cells(6, 3).Value = "目前總產能"
+    ws5.Cells(6, 4).Value = "缺少產能"
+    ws5.Cells(6, 5).Value = "達成率"
+    ws5.Range("A6:E6").Font.Bold = True
+    ws5.Range("A6:E6").Interior.Color = RGB(220, 220, 220)
+    
+    ' Calculate Targets
+    Dim ws3 As Worksheet: Set ws3 = ThisWorkbook.Worksheets(S3)
+    Dim tPOL As Double: tPOL = GetTargetFromS3(ws3, "uPOL-TP")
+    Dim tBMU As Double: tBMU = GetTargetFromS3(ws3, "uBMU-TP")
+    Dim mPOL As Double: mPOL = GetMultiplierFromS5(ws5, "uPOL-TP")
+    Dim mBMU As Double: mBMU = GetMultiplierFromS5(ws5, "uBMU-TP")
+    
+    Dim gPOL As Double: gPOL = tPOL * mPOL
+    Dim gBMU As Double: gBMU = tBMU * mBMU
+    
+    ' Fill Table Data
+    ' uPOL
+    ws5.Cells(7, 1).Value = "uPOL"
+    ws5.Cells(7, 2).Value = gPOL
+    ws5.Cells(7, 3).Value = sumImportPOL
+    ws5.Cells(7, 4).Formula = "=C7-B7" ' 目前 - 目標
+    ws5.Cells(7, 5).Formula = "=IFERROR(C7/B7,0)"
+    
+    ' uBMU
+    ws5.Cells(8, 1).Value = "uBMU"
+    ws5.Cells(8, 2).Value = gBMU
+    ws5.Cells(8, 3).Value = sumImportBMU
+    ws5.Cells(8, 4).Formula = "=C8-B8" ' 目前 - 目標
+    ws5.Cells(8, 5).Formula = "=IFERROR(C8/B8,0)"
+    
+    ' Formatting
+    ws5.Range("B7:D8").NumberFormat = "#,##0"
+    ws5.Range("E7:E8").NumberFormat = "0.0%"
+    ApplyBorder ws5.Range("A6:E8")
+    
+    Application.ScreenUpdating = True
+    MsgBox "已匯入資料 (" & (outR - 2) & " 筆) 並更新目前狀態表。", vbInformation
+    Exit Sub
+
+EH:
+    If Not wb Is Nothing Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    MsgBox "匯入發生錯誤：" & vbCrLf & Err.Description, vbExclamation
+End Sub
+
+Public Sub PB_S5_CalculateChangeover()
+    EnsureBaseSheets
+    
+    Dim ws5 As Worksheet: Set ws5 = ThisWorkbook.Worksheets(S5)
+    Dim wsdTP As Worksheet: Set wsdTP = GetOrCreateSheet(SD_TP)
+    
+    Application.ScreenUpdating = False
+    
+    ' 1. Check Data Existence
+    Dim lastRowA As Long: lastRowA = ws5.Cells(ws5.Rows.count, 1).End(xlUp).Row
+    If lastRowA < 17 Then
+        Application.ScreenUpdating = True
+        MsgBox "請先匯入資料。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' 2. Prepare for Calculation
+    Dim r As Long
+    Dim rStart As Long: rStart = 17
+    
+    ' Clear old results
+    ws5.Range("L" & rStart & ":N10000").ClearContents
+    ws5.Range("L" & rStart & ":N10000").Borders.LineStyle = xlNone
+    
+    ' Summary Vars
+    Dim sumCurPOL As Double: sumCurPOL = 0
+    Dim sumCurBMU As Double: sumCurBMU = 0
+    Dim sumFutPOL As Double: sumFutPOL = 0
+    Dim sumFutBMU As Double: sumFutBMU = 0
+    
+    ' 3. Loop through S5 List
+    For r = rStart To lastRowA
+        Dim mName As String: mName = Trim$(CStr(ws5.Cells(r, 1).Value))
+        Dim curProd As String: curProd = Trim$(CStr(ws5.Cells(r, 2).Value))
+        Dim decision As String: decision = Trim$(CStr(ws5.Cells(r, 4).Value))
+        
+        ' Lookup capacities from hidden sheet
+        Dim tRow As Variant
+        tRow = Application.Match(mName, wsdTP.Columns(1), 0)
+        
+        Dim capPOL As Double: capPOL = 0
+        Dim capBMU As Double: capBMU = 0
+        If Not IsError(tRow) Then
+            capPOL = val(wsdTP.Cells(tRow, 2).Value)
+            capBMU = val(wsdTP.Cells(tRow, 3).Value)
+        End If
+        
+        ' Determine Current Cap (for Summary)
+        If InStr(1, curProd, "uPOL", vbTextCompare) > 0 Then
+            sumCurPOL = sumCurPOL + capPOL
+        ElseIf InStr(1, curProd, "uBMU", vbTextCompare) > 0 Then
+            sumCurBMU = sumCurBMU + capBMU
+        End If
+        
+        ' Determine Future State
+        Dim futProd As String
+        Dim futCap As Double
+        
+        If decision = "換線" Then
+            ' Swap Logic
+            If InStr(1, curProd, "uPOL", vbTextCompare) > 0 Then
+                futProd = "uBMU" ' Switched (Fixed: removed -TP suffix)
+                futCap = capBMU
+            ElseIf InStr(1, curProd, "uBMU", vbTextCompare) > 0 Then
+                futProd = "uPOL" ' Switched (Fixed: removed -TP suffix)
+                futCap = capPOL
+            Else
+                ' Unknown product, keep as is
+                futProd = curProd
+                futCap = 0
+            End If
+        Else
+            ' Maintain or Cannot Switch
+            futProd = curProd
+            If InStr(1, curProd, "uPOL", vbTextCompare) > 0 Then
+                futCap = capPOL
+            ElseIf InStr(1, curProd, "uBMU", vbTextCompare) > 0 Then
+                futCap = capBMU
+            Else
+                futCap = 0
+            End If
+        End If
+        
+        ' Accumulate Future Summary
+        If InStr(1, futProd, "uPOL", vbTextCompare) > 0 Then
+            sumFutPOL = sumFutPOL + futCap
+        ElseIf InStr(1, futProd, "uBMU", vbTextCompare) > 0 Then
+            sumFutBMU = sumFutBMU + futCap
+        End If
+        
+        ' Write Result
+        ws5.Cells(r, 12).Value = mName
+        ws5.Cells(r, 13).Value = futProd
+        ws5.Cells(r, 14).Value = futCap
+        
+        ' Highlight Change
+        If futProd <> curProd Then
+            ws5.Range(ws5.Cells(r, 12), ws5.Cells(r, 14)).Interior.Color = RGB(255, 240, 200)
+        Else
+            ws5.Range(ws5.Cells(r, 12), ws5.Cells(r, 14)).Interior.ColorIndex = xlNone
+        End If
+    Next r
+    
+    ' Apply Borders to Result List
+    ApplyBorder ws5.Range("L16:N" & lastRowA)
+    ws5.Range("N17:N" & lastRowA).NumberFormat = "#,##0"
+    
+    ' 4. Update Summary Area (Start A10)
+    ' Targets
+    Dim tPOL As Double: tPOL = GetTargetFromS3(ThisWorkbook.Worksheets(S3), "uPOL-TP")
+    Dim tBMU As Double: tBMU = GetTargetFromS3(ThisWorkbook.Worksheets(S3), "uBMU-TP")
+    Dim mPOL As Double: mPOL = GetMultiplierFromS5(ws5, "uPOL-TP")
+    Dim mBMU As Double: mBMU = GetMultiplierFromS5(ws5, "uBMU-TP")
+    
+    Dim goalPOL As Double: goalPOL = tPOL * mPOL
+    Dim goalBMU As Double: goalBMU = tBMU * mBMU
+    
+    ' Output Start Row = 10 (Header)
+    Dim sRow As Long: sRow = 10
+    
+    ' Fix: Limit clear range to avoid deleting Row 15 headers
+    ' Was: ws5.Range("A" & sRow & ":E16").Clear
+    ws5.Range("A" & sRow & ":E14").Clear
+    
+    ' Headers
+    ws5.Cells(sRow, 1).Value = "產品"
+    ws5.Cells(sRow, 2).Value = "目標總產能"
+    ws5.Cells(sRow, 3).Value = "目前總產能"
+    ws5.Cells(sRow, 4).Value = "換線後總產能"
+    ws5.Cells(sRow, 5).Value = "最終達成率"
+    ws5.Range("A" & sRow & ":E" & sRow).Font.Bold = True
+    ws5.Range("A" & sRow & ":E" & sRow).Interior.Color = RGB(230, 230, 230)
+    sRow = sRow + 1
+    
+    ' uPOL Row
+    ws5.Cells(sRow, 1).Value = "uPOL"
+    ws5.Cells(sRow, 2).Value = goalPOL
+    ws5.Cells(sRow, 3).Value = sumCurPOL
+    ws5.Cells(sRow, 4).Value = sumFutPOL
+    ws5.Cells(sRow, 5).Value = Format(sumFutPOL / IIf(goalPOL = 0, 1, goalPOL), "0.0%")
+    ApplyBorder ws5.Range("A" & sRow & ":E" & sRow)
+    sRow = sRow + 1
+    
+    ' uBMU Row
+    ws5.Cells(sRow, 1).Value = "uBMU"
+    ws5.Cells(sRow, 2).Value = goalBMU
+    ws5.Cells(sRow, 3).Value = sumCurBMU
+    ws5.Cells(sRow, 4).Value = sumFutBMU
+    ws5.Cells(sRow, 5).Value = Format(sumFutBMU / IIf(goalBMU = 0, 1, goalBMU), "0.0%")
+    ApplyBorder ws5.Range("A" & sRow & ":E" & sRow)
+    
+    ws5.Range("B" & (sRow - 1) & ":D" & sRow).NumberFormat = "#,##0"
+    
+    Application.ScreenUpdating = True
+    MsgBox "換線計算完成！請檢視 L15 區域結果。", vbInformation
+End Sub
+
+Private Sub SortCandidates(ByRef arr As Variant, ByVal count As Long)
+    ' Simple Bubble Sort (Descending by Col 2)
+    Dim i As Long, j As Long
+    Dim temp1 As Variant, temp2 As Variant
+    
+    For i = 1 To count - 1
+        For j = i + 1 To count
+            If arr(j, 2) > arr(i, 2) Then
+                ' Swap
+                temp1 = arr(i, 1): temp2 = arr(i, 2)
+                arr(i, 1) = arr(j, 1): arr(i, 2) = arr(j, 2)
+                arr(j, 1) = temp1: arr(j, 2) = temp2
+            End If
+        Next j
+    Next i
+End Sub
+
+Private Sub SuggestSwitch(ByVal wsOut As Worksheet, ByVal wsData As Worksheet, ByVal fromProd As String, ByVal toProd As String, ByVal needed As Double, ByRef outRow As Long)
+    ' (Replaced by inline logic in CalculateChangeover)
+End Sub
+
+Private Function GetTargetFromS3(ByVal ws3 As Worksheet, ByVal header As String) As Double
+    Dim f As Range
+    ' Check Row 11
+    Set f = ws3.Rows(11).Find(What:=header, LookIn:=xlValues, LookAt:=xlPart)
+    If Not f Is Nothing Then
+        GetTargetFromS3 = val(ws3.Cells(12, f.Column).Value)
+    Else
+        GetTargetFromS3 = 0
+    End If
+End Function
+
+Private Function GetMultiplierFromS5(ByVal ws5 As Worksheet, ByVal header As String) As Double
+    Dim f As Range
+    ' Check Row 2 (Headers) -> Value in Row 3
+    Set f = ws5.Rows(2).Find(What:=header, LookIn:=xlValues, LookAt:=xlPart)
+    If Not f Is Nothing Then
+        GetMultiplierFromS5 = val(ws5.Cells(3, f.Column).Value)
+    Else
+        GetMultiplierFromS5 = 0
+    End If
+End Function
+
+Public Sub PB_SaveSheet5AsXLSX(): SaveOneSheetAsXLSX S5: End Sub
+
+'====================================================
+' Sheet 6 Logic: Import Down Time & Generate Charts
+'====================================================
+Public Sub PB_GenerateSheet6()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim ws6 As Worksheet: Set ws6 = ThisWorkbook.Worksheets(S6)
+    Application.ScreenUpdating = False
+    
+    ws6.Cells.Clear
+    ws6.Cells.Font.name = "Microsoft JhengHei"
+    ws6.Cells.Font.Size = 11
+    
+    With ws6.Range("A1:H1")
+        .Merge
+        .Value = "產能平衡圖 - 第6頁 (每日產能狀態圖 - 連結 S3 設定)"
+        .Font.Bold = True
+        .Font.Size = 16
+        .RowHeight = 26
+    End With
+    
+    ' Parameter Area (Just info, since we link S3)
+    ws6.Range("A2").Value = "資料來源"
+    ws6.Range("B2").Value = "S3 (機故/產速比例) + S5 (換線決策)"
+    ws6.Range("A2").Font.Bold = True
+    ws6.Range("A2").Interior.Color = RGB(240, 240, 240)
+    
+    DeleteButtonIfExists ws6, BTN_S6_IMPORT
+    DeleteButtonIfExists ws6, BTN_S6_CHART
+    DeleteButtonIfExists ws6, BTN_S6_SAVE
+    DeleteButtonIfExists ws6, BTN_S6_TO_S7
+    
+    Dim anchor As Range: Set anchor = ws6.Range("D2")
+    ' Removed Import Button as requested
+    AddFormButton ws6, BTN_S6_CHART, "產生圖表", "PB_S6_CreateCharts", anchor.Left, anchor.Top, 220, 26
+    AddFormButton ws6, BTN_S6_SAVE, "另存新檔 (.xlsx)", "PB_SaveSheet6AsXLSX", anchor.Left, anchor.Top + 32, 220, 26
+    
+    Application.ScreenUpdating = True
+    MsgBox "第6頁已初始化 (v4.12.0)。請直接點選產生圖表。", vbInformation
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成第6頁發生錯誤:" & vbCrLf & Err.Description, vbExclamation
+End Sub
+Public Sub PB_S6_ImportDT()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim f As Variant
+    f = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "選擇機故資料檔案")
+    If f = False Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    Dim wb As Workbook: Set wb = Workbooks.Open(CStr(f), ReadOnly:=True)
+    Dim wsSrc As Worksheet
+    
+    On Error Resume Next
+    Set wsSrc = wb.Worksheets("機故統計")
+    On Error GoTo EH
+    
+    If wsSrc Is Nothing Then
+        wb.Close False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "找不到「機故統計」工作表。", vbExclamation
+        Exit Sub
+    End If
+    
+    Dim wsdDT As Worksheet: Set wsdDT = GetOrCreateSheet(SD_DT)
+    MakeVeryHidden wsdDT
+    wsdDT.Cells.Clear
+    
+    ' Columns: A=Machine, D=TotalDownTime (Assume Minutes?)
+    Dim lastR As Long: lastR = wsSrc.Cells(wsSrc.Rows.count, 1).End(xlUp).Row
+    If lastR < 2 Then
+        wb.Close False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "匯入檔案無資料。", vbExclamation
+        Exit Sub
+    End If
+    
+    wsdDT.Range("A1").Value = "Machine"
+    wsdDT.Range("B1").Value = "TotalDownTime"
+    
+    Dim r As Long, outR As Long
+    outR = 2
+    For r = 2 To lastR
+        wsdDT.Cells(outR, 1).Value = wsSrc.Cells(r, 1).Value
+        wsdDT.Cells(outR, 2).Value = wsSrc.Cells(r, 4).Value
+        outR = outR + 1
+    Next r
+    
+    wb.Close False
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    
+    MsgBox "已匯入機故資料 (" & (outR - 2) & " 筆)。", vbInformation
+    Exit Sub
+EH:
+    If Not wb Is Nothing Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    MsgBox "匯入機故資料發生錯誤：" & vbCrLf & Err.Description, vbExclamation
+End Sub
+Public Sub PB_S6_CreateCharts()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim ws0 As Worksheet: Set ws0 = ThisWorkbook.Worksheets(S0)
+    Dim ws3 As Worksheet: Set ws3 = ThisWorkbook.Worksheets(S3)
+    Dim ws5 As Worksheet: Set ws5 = ThisWorkbook.Worksheets(S5)
+    Dim ws6 As Worksheet: Set ws6 = ThisWorkbook.Worksheets(S6)
+    Dim wsdTP As Worksheet: Set wsdTP = GetOrCreateSheet(SD_TP)
+    
+    Application.ScreenUpdating = False
+    DeleteAllCharts ws6
+    
+    ' 讀取資料天數
+    Dim dataDays As Double
+    dataDays = val(ws3.Range("B2").Value)
+    If dataDays <= 0 Then dataDays = 1
+    
+    ' --- Variable Declarations ---
+    Dim mKey As String
+    Dim pN As String
+    
+    ' --- 1. S0 Group Parsing ---
+    ' Dict: Key=GroupName, Value=Collection of ProcessNames
+    Dim dictGroups As Object: Set dictGroups = CreateObject("Scripting.Dictionary")
+    ' Dict: Key=ProcessName, Value=GroupName (Reverse lookup)
+    Dim dictProc2Group As Object: Set dictProc2Group = CreateObject("Scripting.Dictionary")
+    
+    Dim r0 As Long, lastR0 As Long
+    lastR0 = ws0.Cells(ws0.Rows.count, 2).End(xlUp).Row
+    For r0 = 4 To lastR0
+        Dim gName As String: gName = Trim$(CStr(ws0.Cells(r0, 1).Value))
+        pN = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        
+        If gName <> "" And pN <> "" Then
+            If Not dictGroups.exists(gName) Then
+                dictGroups.Add gName, New Collection
+            End If
+            ' Avoid duplicates in collection
+            Dim exists As Boolean: exists = False
+            If dictProc2Group.exists(pN) Then exists = True
+            
+            If Not exists Then
+                dictGroups(gName).Add pN
+                dictProc2Group.Add pN, gName
+            End If
+        End If
+    Next r0
+    
+    ' --- 2. Identify Target Groups ---
+    Dim tpName1 As String: tpName1 = Trim$(CStr(ws5.Range("B2").Value)) ' uPOL-TP
+    Dim tpName2 As String: tpName2 = Trim$(CStr(ws5.Range("C2").Value)) ' uBMU-TP
+    
+    ' Read Unit Factors (PCS per Sheet) from S5
+    Dim factorPOL As Double: factorPOL = val(ws5.Range("B3").Value)
+    Dim factorBMU As Double: factorBMU = val(ws5.Range("C3").Value)
+    If factorPOL <= 0 Then factorPOL = 1
+    If factorBMU <= 0 Then factorBMU = 1
+    
+    Dim targetGroups As Object: Set targetGroups = CreateObject("Scripting.Dictionary")
+    
+    If dictProc2Group.exists(tpName1) Then targetGroups(dictProc2Group(tpName1)) = True
+    If dictProc2Group.exists(tpName2) Then targetGroups(dictProc2Group(tpName2)) = True
+    
+    If targetGroups.count = 0 Then
+        Application.ScreenUpdating = True
+        MsgBox "無法在 S0 設定中找到 " & tpName1 & " 或 " & tpName2 & " 所屬的群組。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' --- 3. Pre-calculate TP Special Logic (S5) ---
+    Dim tpData As Object: Set tpData = CreateObject("Scripting.Dictionary")
+    
+    ' Init Map for Machine -> Cap/DT/Spd
+    Dim dictM2P As Object: Set dictM2P = CreateObject("Scripting.Dictionary")
+    Dim c0 As Long, lastC0 As Long
+    For r0 = 4 To lastR0
+        pN = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        lastC0 = ws0.Cells(r0, ws0.Columns.count).End(xlToLeft).Column
+        For c0 = 3 To lastC0
+            Dim mID As String: mID = UCase(Trim$(CStr(ws0.Cells(r0, c0).Value)))
+            If mID <> "" Then
+                If Not dictM2P.exists(mID) Then dictM2P.Add mID, pN
+            End If
+        Next c0
+    Next r0
+    
+    ' Init S3 Maps
+    Dim dictP2DT As Object: Set dictP2DT = CreateObject("Scripting.Dictionary")
+    Dim dictP2Spd As Object: Set dictP2Spd = CreateObject("Scripting.Dictionary")
+    Dim dictP2Cap As Object: Set dictP2Cap = CreateObject("Scripting.Dictionary")
+    Dim dictP2Target As Object: Set dictP2Target = CreateObject("Scripting.Dictionary")
+    
+    Dim c3 As Long, lastC3 As Long
+    lastC3 = ws3.Cells(11, ws3.Columns.count).End(xlToLeft).Column
+    For c3 = 2 To lastC3
+        Dim s3Name As String: s3Name = Trim$(CStr(ws3.Cells(11, c3).Value))
+        If s3Name <> "" Then
+            dictP2Target(s3Name) = val(ws3.Cells(12, c3).Value)
+            dictP2Cap(s3Name) = val(ws3.Cells(13, c3).Value)
+            dictP2DT(s3Name) = val(ws3.Cells(14, c3).Value)
+            dictP2Spd(s3Name) = val(ws3.Cells(15, c3).Value)
+        End If
+    Next c3
+    
+    ' Init TP Caps (Source is PCS, need to convert to Sheet later)
+    Dim dictCapPOL As Object: Set dictCapPOL = CreateObject("Scripting.Dictionary")
+    Dim dictCapBMU As Object: Set dictCapBMU = CreateObject("Scripting.Dictionary")
+    Dim rTP As Long, lastRTP As Long
+    lastRTP = wsdTP.Cells(wsdTP.Rows.count, 1).End(xlUp).Row
+    For rTP = 2 To lastRTP
+        Dim mk As String: mk = UCase(Trim$(CStr(wsdTP.Cells(rTP, 1).Value)))
+        dictCapPOL(mk) = val(wsdTP.Cells(rTP, 2).Value)
+        dictCapBMU(mk) = val(wsdTP.Cells(rTP, 3).Value)
+    Next rTP
+    
+    ' Calculate TP Values Loop (S5)
+    Dim uPOL_Arr(0 To 4) As Double ' G, Y, R, B, D
+    Dim uBMU_Arr(0 To 4) As Double
+    
+    Dim r5 As Long, lastR5 As Long
+    lastR5 = ws5.Cells(ws5.Rows.count, 12).End(xlUp).Row
+    
+    For r5 = 17 To lastR5
+        Dim mName As String: mName = Trim$(CStr(ws5.Cells(r5, 12).Value))
+        Dim futProd As String: futProd = Trim$(CStr(ws5.Cells(r5, 13).Value))
+        Dim curProd As String: curProd = Trim$(CStr(ws5.Cells(r5, 2).Value))
+        mKey = UCase(mName)
+        
+        Dim cPOL As Double: cPOL = 0
+        Dim cBMU As Double: cBMU = 0
+        If dictCapPOL.exists(mKey) Then cPOL = dictCapPOL(mKey)
+        If dictCapBMU.exists(mKey) Then cBMU = dictCapBMU(mKey)
+        
+        ' Convert Unit: PCS -> Sheet & Scale by Data Days
+        cPOL = (cPOL / factorPOL) * dataDays
+        cBMU = (cBMU / factorBMU) * dataDays
+        
+        Dim dtR As Double: dtR = 0
+        Dim spdR As Double: spdR = 1
+        If dictM2P.exists(mKey) Then
+            Dim proc As String: proc = dictM2P(mKey)
+            If dictP2DT.exists(proc) Then dtR = dictP2DT(proc)
+            If dictP2Spd.exists(proc) Then spdR = dictP2Spd(proc)
+        End If
+        
+        ' uPOL Logic
+        If InStr(1, curProd, "uPOL", vbTextCompare) > 0 And InStr(1, futProd, "uPOL", vbTextCompare) > 0 Then
+            Dim rmn As Double: rmn = cPOL * (1 - dtR)
+            uPOL_Arr(0) = uPOL_Arr(0) + rmn * spdR
+            uPOL_Arr(1) = uPOL_Arr(1) + rmn * (1 - spdR)
+            uPOL_Arr(2) = uPOL_Arr(2) + cPOL * dtR
+        ElseIf InStr(1, curProd, "uBMU", vbTextCompare) > 0 And InStr(1, futProd, "uPOL", vbTextCompare) > 0 Then
+            uPOL_Arr(3) = uPOL_Arr(3) + cPOL
+        ElseIf InStr(1, curProd, "uPOL", vbTextCompare) > 0 And InStr(1, futProd, "uBMU", vbTextCompare) > 0 Then
+            uPOL_Arr(4) = uPOL_Arr(4) + cPOL
+        End If
+        
+        ' uBMU Logic
+        If InStr(1, curProd, "uBMU", vbTextCompare) > 0 And InStr(1, futProd, "uBMU", vbTextCompare) > 0 Then
+            Dim rmnB As Double: rmnB = cBMU * (1 - dtR)
+            uBMU_Arr(0) = uBMU_Arr(0) + rmnB * spdR
+            uBMU_Arr(1) = uBMU_Arr(1) + rmnB * (1 - spdR)
+            uBMU_Arr(2) = uBMU_Arr(2) + cBMU * dtR
+        ElseIf InStr(1, curProd, "uPOL", vbTextCompare) > 0 And InStr(1, futProd, "uBMU", vbTextCompare) > 0 Then
+            uBMU_Arr(3) = uBMU_Arr(3) + cBMU
+        ElseIf InStr(1, curProd, "uBMU", vbTextCompare) > 0 And InStr(1, futProd, "uPOL", vbTextCompare) > 0 Then
+            uBMU_Arr(4) = uBMU_Arr(4) + cBMU
+        End If
+    Next r5
+    
+    tpData.Add tpName1, uPOL_Arr
+    tpData.Add tpName2, uBMU_Arr
+    
+    ' --- 4. Chart Generation Loop ---
+    Dim grpKey As Variant
+    Dim topPos As Double: topPos = 100
+    
+    For Each grpKey In targetGroups.keys
+        Dim procColl As Collection: Set procColl = dictGroups(grpKey)
+        Dim count As Long: count = procColl.count
+        
+        If count > 0 Then
+            Dim arrX() As String: ReDim arrX(1 To count)
+            Dim arrGray() As Double: ReDim arrGray(1 To count)
+            Dim arrYel() As Double: ReDim arrYel(1 To count)
+            Dim arrRed() As Double: ReDim arrRed(1 To count)
+            Dim arrBlue() As Double: ReDim arrBlue(1 To count)
+            Dim arrDotted() As Double: ReDim arrDotted(1 To count)
+            Dim arrLine() As Double: ReDim arrLine(1 To count)
+            
+            Dim i As Long
+            For i = 1 To count
+                pN = procColl(i)
+                arrX(i) = pN
+                
+                If tpData.exists(pN) Then
+                    ' Is TP Process -> Use S5 Calc (Converted to Sheet & Scaled)
+                    Dim vals As Variant: vals = tpData(pN)
+                    arrGray(i) = Application.WorksheetFunction.Round(vals(0), 0)
+                    arrYel(i) = Application.WorksheetFunction.Round(vals(1), 0)
+                    arrRed(i) = Application.WorksheetFunction.Round(vals(2), 0)
+                    arrBlue(i) = Application.WorksheetFunction.Round(vals(3), 0)
+                    arrDotted(i) = Application.WorksheetFunction.Round(vals(4), 0)
+                    
+                    ' Target: Use S3 Target (already in Sheets) & Scale
+                    If dictP2Target.exists(pN) Then arrLine(i) = Application.WorksheetFunction.Round(dictP2Target(pN) * dataDays, 0)
+                Else
+                    ' Standard Process -> Use S3 Calc & Scale
+                    If dictP2Cap.exists(pN) Then
+                        Dim cap As Double: cap = dictP2Cap(pN) * dataDays
+                        Dim dR As Double: dR = 0
+                        Dim sR As Double: sR = 1
+                        If dictP2DT.exists(pN) Then dR = dictP2DT(pN)
+                        If dictP2Spd.exists(pN) Then sR = dictP2Spd(pN)
+                        
+                        Dim rm As Double: rm = cap * (1 - dR)
+                        arrGray(i) = Application.WorksheetFunction.Round(rm * sR, 0)
+                        arrYel(i) = Application.WorksheetFunction.Round(rm * (1 - sR), 0)
+                        arrRed(i) = Application.WorksheetFunction.Round(cap * dR, 0)
+                        arrBlue(i) = 0
+                        arrDotted(i) = 0
+                        
+                        If dictP2Target.exists(pN) Then arrLine(i) = Application.WorksheetFunction.Round(dictP2Target(pN) * dataDays, 0)
+                    End If
+                End If
+            Next i
+            
+            DrawS6GroupChart ws6, CStr(grpKey) & "專屬設備 產能平衡圖 (片)", 50, topPos, _
+                             arrX, arrGray, arrYel, arrRed, arrBlue, arrDotted, arrLine
+            
+            topPos = topPos + 450
+        End If
+    Next grpKey
+    
+    Application.ScreenUpdating = True
+    MsgBox "圖表已生成 (" & targetGroups.count & " 組)。數值已依資料天數 (" & dataDays & ") 加乘。", vbInformation
+    Exit Sub
+
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "產生圖表錯誤: " & Err.Description, vbExclamation
+End Sub
+Private Sub DrawS6GroupChart(ByVal ws As Worksheet, ByVal title As String, ByVal leftPos As Double, ByVal topPos As Double, _
+                             ByVal arrX As Variant, ByVal arrGray As Variant, ByVal arrYel As Variant, _
+                             ByVal arrRed As Variant, ByVal arrBlue As Variant, ByVal arrDotted As Variant, _
+                             ByVal arrLine As Variant, Optional ByVal yMax As Double = 0)
+    
+    Dim chObj As ChartObject
+    Set chObj = ws.ChartObjects.Add(Left:=leftPos, Top:=topPos, width:=600, height:=400)
+    
+    With chObj.Chart
+        .ChartType = xlColumnStacked
+        .HasTitle = True
+        .ChartTitle.Text = title
+        .HasLegend = True
+        
+        Do While .SeriesCollection.count > 0
+            .SeriesCollection(1).Delete
+        Loop
+        
+        ' 1. Effective (Gray)
+        With .SeriesCollection.NewSeries
+            .name = "有效產能"
+            .XValues = arrX
+            .Values = arrGray
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(192, 192, 192)
+            .HasDataLabels = True
+        End With
+        
+        ' 2. Speed Loss (Yellow)
+        With .SeriesCollection.NewSeries
+            .name = "產速損失"
+            .Values = arrYel
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(255, 255, 0)
+            .HasDataLabels = True
+        End With
+        
+        ' 3. DT Loss (Red)
+        With .SeriesCollection.NewSeries
+            .name = "機故損失"
+            .Values = arrRed
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(255, 0, 0)
+            .HasDataLabels = True
+        End With
+        
+        ' 4. Added (Blue)
+        With .SeriesCollection.NewSeries
+            .name = "換線增加"
+            .Values = arrBlue
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(0, 112, 192)
+            .HasDataLabels = True
+        End With
+        
+        ' 5. Lost (Dotted)
+        With .SeriesCollection.NewSeries
+            .name = "換線減少"
+            .Values = arrDotted
+            .ChartType = xlColumnStacked
+            .Format.Fill.Solid
+            .Format.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .HasDataLabels = True
+            With .Format.Line
+                .Visible = msoTrue
+                .ForeColor.RGB = RGB(0, 0, 0)
+                .DashStyle = msoLineDash
+                .Weight = 2.25
+            End With
+        End With
+        
+        ' 6. Target (Line)
+        With .SeriesCollection.NewSeries
+            .name = "目標產能"
+            .Values = arrLine
+            .ChartType = xlLine
+            .Format.Line.ForeColor.RGB = RGB(0, 0, 255)
+            .Format.Line.DashStyle = msoLineDash
+            .Format.Line.Weight = 2
+            .MarkerStyle = xlMarkerStyleNone
+        End With
+        
+        ' Optional Y-Axis Max
+        If yMax > 0 Then
+            .Axes(xlValue).MinimumScale = 0
+            .Axes(xlValue).MaximumScale = yMax
+        End If
+        
+        ' v4.17.6: Transparency
+        .Axes(xlValue).MajorGridlines.Format.Line.Transparency = 1
+        
+        ' v4.17.8: Label Position InsideBase if > yMax
+        If yMax > 0 Then
+            Dim serEff As Series
+            Set serEff = .SeriesCollection(1)
+            Dim ptIdx As Long
+            Dim valIdx As Long
+            For ptIdx = 1 To serEff.Points.count
+                valIdx = LBound(arrGray) + ptIdx - 1
+                If arrGray(valIdx) > yMax Then
+                    serEff.Points(ptIdx).DataLabel.Position = xlLabelPositionInsideBase
+                End If
+            Next ptIdx
+        End If
+        
+    End With
+End Sub
+
+
+Private Sub DrawS6Chart(ByVal ws As Worksheet, ByVal title As String, ByVal leftPos As Double, ByVal topPos As Double, _
+                        ByVal vGray As Double, ByVal vYel As Double, ByVal vRed As Double, _
+                        ByVal vBlue As Double, ByVal vDotted As Double, ByVal vTarget As Double)
+    
+    Dim chObj As ChartObject
+    Set chObj = ws.ChartObjects.Add(Left:=leftPos, Top:=topPos, width:=350, height:=400)
+    
+    ' 1. Calculate Y-Axis Max to ensure Line Position is accurate
+    Dim stackHeight As Double
+    stackHeight = vGray + vYel + vRed + vBlue + vDotted
+    
+    Dim yMax As Double
+    yMax = Application.WorksheetFunction.Max(stackHeight, vTarget)
+    If yMax = 0 Then yMax = 100
+    yMax = yMax * 1.1 ' Add 10% buffer
+    
+    With chObj.Chart
+        .ChartType = xlColumnStacked
+        .HasTitle = True
+        .ChartTitle.Text = title
+        .HasLegend = True
+        
+        Do While .SeriesCollection.count > 0
+            .SeriesCollection(1).Delete
+        Loop
+        
+        Dim xArr As Variant: xArr = Array("Total")
+        
+        ' --- Data Series ---
+        ' 1. Effective (Gray)
+        If vGray > 0 Then
+            With .SeriesCollection.NewSeries
+                .name = "有效產能"
+                .XValues = xArr
+                .Values = Array(vGray)
+                .Format.Fill.ForeColor.RGB = RGB(192, 192, 192)
+            End With
+        End If
+        
+        ' 2. Speed Loss (Yellow)
+        If vYel > 0 Then
+            With .SeriesCollection.NewSeries
+                .name = "產速損失"
+                .Values = Array(vYel)
+                .Format.Fill.ForeColor.RGB = RGB(255, 255, 0)
+            End With
+        End If
+        
+        ' 3. DT Loss (Red)
+        If vRed > 0 Then
+            With .SeriesCollection.NewSeries
+                .name = "機故損失"
+                .Values = Array(vRed)
+                .Format.Fill.ForeColor.RGB = RGB(255, 0, 0)
+            End With
+        End If
+        
+        ' 4. Added (Blue)
+        If vBlue > 0 Then
+            With .SeriesCollection.NewSeries
+                .name = "換線增加"
+                .Values = Array(vBlue)
+                .Format.Fill.ForeColor.RGB = RGB(0, 112, 192)
+            End With
+        End If
+        
+        ' 5. Lost (Dotted)
+        If vDotted > 0 Then
+            With .SeriesCollection.NewSeries
+                .name = "換線減少"
+                .Values = Array(vDotted)
+                .Format.Fill.Solid
+                .Format.Fill.ForeColor.RGB = RGB(255, 255, 255)
+                With .Format.Line
+                    .Visible = msoTrue
+                    .ForeColor.RGB = RGB(0, 0, 0)
+                    .DashStyle = msoLineDash
+                    .Weight = 2.25
+                End With
+            End With
+        End If
+        
+        ' --- Axis Settings ---
+        .Axes(xlValue).MinimumScale = 0
+        .Axes(xlValue).MaximumScale = yMax
+        .Axes(xlCategory).TickLabelPosition = xlTickLabelPositionLow
+        
+        ' --- Draw Target Line (Blue Dotted) ---
+        ' Using Shapes because single-point line chart is invisible
+        ' Need to force refresh to get accurate PlotArea dimensions
+        .Refresh
+        
+        Dim paHeight As Double, paTop As Double, paLeft As Double, paWidth As Double
+        paHeight = .PlotArea.InsideHeight
+        paTop = .PlotArea.InsideTop
+        paLeft = .PlotArea.InsideLeft
+        paWidth = .PlotArea.InsideWidth
+        
+        ' Calculate Y Position (Pixel from Top)
+        ' Y = Top + Height * (1 - (Value / Max))
+        Dim lineY As Double
+        lineY = paTop + paHeight * (1 - (vTarget / yMax))
+        
+        Dim shpLine As Shape
+        Set shpLine = .Shapes.AddLine(paLeft, lineY, paLeft + paWidth, lineY)
+        With shpLine.Line
+            .ForeColor.RGB = RGB(0, 0, 255) ' Blue
+            .DashStyle = msoLineDash        ' Dotted/Dash
+            .Weight = 2                     ' Thickness
+        End With
+        
+        ' Add Dummy Series for Legend (Invisible Line)
+        With .SeriesCollection.NewSeries
+            .name = "目標產能"
+            .Values = Array(vTarget) ' Dummy value
+            .ChartType = xlLine
+            .Format.Line.Visible = msoFalse ' Hide the actual series line
+            .Format.Fill.Visible = msoFalse
+            ' We only want the Legend entry to look correct.
+            ' But standard legend will show what the series looks like (invisible).
+            ' So we style this dummy series to match the shape,
+            ' even though it won't show up on the chart (single point).
+            .Format.Line.Visible = msoTrue
+            .Format.Line.ForeColor.RGB = RGB(0, 0, 255)
+            .Format.Line.DashStyle = msoLineDash
+            .Format.Line.Weight = 2
+            .MarkerStyle = xlMarkerStyleNone
+        End With
+        
+    End With
+End Sub
+Public Sub PB_SaveSheet6AsXLSX(): SaveOneSheetAsXLSX S6: End Sub
+
+'====================================================
+' Sheet 7 Logic: Weekly Charts (Scale x7)
+'====================================================
+Public Sub PB_GenerateSheet7()
+    On Error GoTo EH
+    EnsureBaseSheets
+
+    Dim ws4 As Worksheet, ws7 As Worksheet
+    Set ws4 = ThisWorkbook.Worksheets(S4)
+    Set ws7 = ThisWorkbook.Worksheets(S7)
+
+    Application.ScreenUpdating = False
+    
+    ' 1. Clear Sheet (Cells)
+    PB_ClearSheet ws7
+    
+    ' 2. Delete ALL existing buttons on S7
+    Dim btn As Button
+    For Each btn In ws7.Buttons
+        btn.Delete
+    Next btn
+    
+    ' Check S4
+    If ws4.Cells(1, 1).Value = "" Then
+        MsgBox "第4頁無資料，無法生成第7頁。", vbExclamation
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+
+    ' A1: Title
+    ws7.Range("A1").Value = "產能平衡圖 - 第7頁 (目標片次 & 設備能力 - Before/Now/Future)"
+    ws7.Range("A1:H1").Merge
+    ws7.Range("A1").Font.Bold = True
+    ws7.Range("A1").Font.Size = 16
+    ws7.Rows(1).RowHeight = 26
+    
+    ' [新增] A2, B2: 資料天數設定
+    ws7.Range("A2").Value = "資料天數"
+    ws7.Range("B2").Value = 7
+    ws7.Range("A2").Font.Bold = True
+    
+    ' Global S7 Buttons
+    Dim anchor As Range: Set anchor = ws7.Range("G2")
+    AddFormButton ws7, BTN_S7_TO_S8, "產生第8頁 (TP換線)", "PB_GenerateSheet8", anchor.Left, anchor.Top, 220, 26
+    AddFormButton ws7, "btnPB_S7_Save", "另存新檔 (.xlsx)", "PB_SaveSheet7AsXLSX", anchor.Left, anchor.Top + 32, 220, 26
+
+    ' Generate 3 Sections
+    Dim currentTop As Long: currentTop = 5
+    
+    currentTop = BuildS7Section(ws7, ws4, "Before", 3, currentTop)
+    currentTop = currentTop + 3
+    currentTop = BuildS7Section(ws7, ws4, "Now", 54, currentTop)
+    currentTop = currentTop + 3
+    currentTop = BuildS7Section(ws7, ws4, "Future", 95, currentTop)
+
+    SaveSheetHash S7, ComputeSheetHash_Safe(ws7)
+
+    Application.ScreenUpdating = True
+    MsgBox "第7頁已生成 (B/N/F)，已預設資料天數為 7。", vbInformation
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成第7頁發生錯誤:" & vbCrLf & Err.Description, vbExclamation
+End Sub
+Private Function BuildS7Section(ByVal ws7 As Worksheet, ByVal ws4 As Worksheet, ByVal sectionName As String, ByVal s4StartRow As Long, ByVal outStartRow As Long) As Long
+    ' Header
+    ws7.Cells(outStartRow, 1).Value = sectionName & " 狀態"
+    ws7.Range(ws7.Cells(outStartRow, 1), ws7.Cells(outStartRow, 5)).Merge
+    ws7.Cells(outStartRow, 1).Font.Bold = True
+    ws7.Cells(outStartRow, 1).Interior.Color = RGB(200, 220, 240)
+    
+    ' Buttons
+    Dim btnBaseName As String: btnBaseName = "btnS7_" & sectionName
+    Dim anchor As Range: Set anchor = ws7.Cells(outStartRow, 12)
+    
+    AddFormButton ws7, btnBaseName & "_Maint", "匯入MES ER201-維修保養查詢(" & sectionName & ")", "PB_S7_ImportMaint_" & sectionName, anchor.Left, anchor.Top, 200, 24
+    AddFormButton ws7, btnBaseName & "_Auto", "匯入MES設備連線資料查詢(" & sectionName & ")", "PB_S7_ImportAuto_" & sectionName, anchor.Left + 210, anchor.Top, 200, 24
+    
+    ' Table Header
+    Dim baseRow As Long: baseRow = outStartRow + 2
+    ws7.Cells(baseRow, 1).Value = "製程"
+    ws7.Cells(baseRow + 1, 1).Value = "機台/站別"
+    ws7.Cells(baseRow + 2, 1).Value = "目標片次"
+    ws7.Cells(baseRow + 3, 1).Value = "設備能力"
+    ws7.Cells(baseRow + 4, 1).Value = "機故比例"
+    ws7.Cells(baseRow + 5, 1).Value = "產速比例"
+    ws7.Cells(baseRow + 6, 1).Value = "設備數量"
+    
+    ws7.Range(ws7.Cells(baseRow, 1), ws7.Cells(baseRow + 6, 1)).Font.Bold = True
+    ws7.Range(ws7.Cells(baseRow, 1), ws7.Cells(baseRow + 6, 1)).Interior.Color = RGB(240, 240, 240)
+    
+    ' Load S0 Mappings (Process -> Group)
+    Dim ws0 As Worksheet: Set ws0 = ThisWorkbook.Worksheets(S0)
+    Dim dictP2G As Object: Set dictP2G = CreateObject("Scripting.Dictionary")
+    
+    Dim r0 As Long, lastR0 As Long
+    lastR0 = ws0.Cells(ws0.Rows.count, 1).End(xlUp).Row
+    
+    For r0 = 4 To lastR0
+        Dim gName As String: gName = Trim$(CStr(ws0.Cells(r0, 1).Value))
+        Dim pName As String: pName = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        If pName <> "" Then
+            If Not dictP2G.exists(UCase(pName)) Then dictP2G.Add UCase(pName), gName
+        End If
+    Next r0
+    
+    ' Parse S4 Data
+    Dim hdrRow As Long: hdrRow = s4StartRow + 8
+    Dim rScan As Long
+    Dim avgCTCol As Long: avgCTCol = 0
+    Dim eqBeforeCol As Long: eqBeforeCol = 0
+    Dim eqAfterCol As Long: eqAfterCol = 0
+    Dim machineCol As Long: machineCol = 1
+    
+    For rScan = s4StartRow To s4StartRow + 15
+        If Trim$(CStr(ws4.Cells(rScan, 1).Value)) = "設備名稱" Then
+            hdrRow = rScan + 1
+            avgCTCol = FindHeaderColInRow(ws4, hdrRow, "平均 C/T")
+            eqBeforeCol = FindHeaderColInRow(ws4, hdrRow, "擴產前設備數")
+            eqAfterCol = FindHeaderColInRow(ws4, hdrRow, "擴產後設備數")
+            Exit For
+        End If
+    Next rScan
+    
+    If avgCTCol = 0 Then
+        ws7.Cells(baseRow + 1, 2).Value = "無法讀取 S4 資料格式"
+        BuildS7Section = baseRow + 8
+        Exit Function
+    End If
+    
+    Dim hrs As Double: hrs = 20
+    Dim hCell As Range
+    Set hCell = ws4.Range("A" & s4StartRow & ":B" & (s4StartRow + 10)).Find("生產時數")
+    If Not hCell Is Nothing Then hrs = val(hCell.Offset(0, 1).Value)
+    If hrs <= 0 Then hrs = 20
+    
+    Dim s4R As Long: s4R = hdrRow + 1
+    Dim outC As Long: outC = 2
+    
+    Do While True
+        Dim itemNameS4 As String: itemNameS4 = Trim$(CStr(ws4.Cells(s4R, machineCol).Value))
+        If itemNameS4 = "" Then Exit Do
+        
+        Dim pKey As String: pKey = UCase(itemNameS4)
+        
+        ' 1. Determine Group (Row 10 equivalent - baseRow)
+        Dim groupVal As String
+        If dictP2G.exists(pKey) Then
+            groupVal = dictP2G(pKey)
+        Else
+            groupVal = "未定義群組"
+        End If
+        ws7.Cells(baseRow, outC).Value = groupVal
+        
+        ' 2. Row 11 equivalent (baseRow + 1) is Process Name
+        ws7.Cells(baseRow + 1, outC).Value = itemNameS4
+        
+        ' ... Calculate Values ...
+        Dim targetCol As Long: targetCol = avgCTCol + 1
+        ws7.Cells(baseRow + 2, outC).Value = ws4.Cells(s4R, targetCol).Value
+        
+        Dim eqQty As Double
+        If sectionName = "Future" Then
+            eqQty = val(ws4.Cells(s4R, eqAfterCol).Value)
+        Else
+            eqQty = val(ws4.Cells(s4R, eqBeforeCol).Value)
+        End If
+        ws7.Cells(baseRow + 6, outC).Value = eqQty
+        
+        Dim aCT As Double: aCT = val(ws4.Cells(s4R, avgCTCol).Value)
+        Dim capVal As Double: capVal = 0
+        If aCT > 0 Then capVal = (eqQty * hrs * 3600) / aCT
+        ws7.Cells(baseRow + 3, outC).Value = Application.WorksheetFunction.Round(capVal, 0)
+        
+        ws7.Cells(baseRow + 4, outC).Value = 0
+        ws7.Cells(baseRow + 5, outC).Value = 1
+        
+        outC = outC + 1
+        s4R = s4R + 1
+        If s4R > s4StartRow + 50 Then Exit Do
+    Loop
+    
+    Dim lastCol As Long: lastCol = outC - 1
+    If lastCol >= 2 Then
+        BuildMergedCategoryHeader ws7, baseRow, 2, lastCol
+        ws7.Range(ws7.Cells(baseRow + 2, 2), ws7.Cells(baseRow + 2, lastCol)).NumberFormat = "#,##0"
+        ws7.Range(ws7.Cells(baseRow + 3, 2), ws7.Cells(baseRow + 3, lastCol)).NumberFormat = "#,##0"
+        ws7.Range(ws7.Cells(baseRow + 4, 2), ws7.Cells(baseRow + 5, lastCol)).NumberFormat = "0%"
+        ws7.Range(ws7.Cells(baseRow + 6, 2), ws7.Cells(baseRow + 6, lastCol)).NumberFormat = "#,##0"
+        
+        ws7.Range(ws7.Cells(baseRow, 2), ws7.Cells(baseRow + 1, lastCol)).HorizontalAlignment = xlCenter
+        ws7.Range(ws7.Cells(baseRow, 2), ws7.Cells(baseRow + 1, lastCol)).VerticalAlignment = xlCenter
+        ApplyBorder ws7.Range(ws7.Cells(baseRow, 1), ws7.Cells(baseRow + 6, lastCol))
+    End If
+    
+    BuildS7Section = baseRow + 8
+End Function
+Public Sub PB_S7_ImportMaint_Before(): PB_S7_ImportMaint_Generic "Before", 14: End Sub
+Public Sub PB_S7_ImportMaint_Now():    PB_S7_ImportMaint_Generic "Now", 14: End Sub
+Public Sub PB_S7_ImportMaint_Future(): PB_S7_ImportMaint_Generic "Future", 14: End Sub
+
+Public Sub PB_S7_ImportAuto_Before(): PB_S7_ImportAuto_Generic "Before", 14: End Sub
+Public Sub PB_S7_ImportAuto_Now():    PB_S7_ImportAuto_Generic "Now", 14: End Sub
+Public Sub PB_S7_ImportAuto_Future(): PB_S7_ImportAuto_Generic "Future", 14: End Sub
+
+Private Sub PB_S7_ImportMaint_Generic(ByVal section As String, ByVal rowOffset As Long)
+    On Error GoTo EH
+    
+    Dim ws0 As Worksheet: Set ws0 = ThisWorkbook.Worksheets(S0)
+    Dim ws7 As Worksheet: Set ws7 = ThisWorkbook.Worksheets(S7)
+    
+    Dim f As Range
+    Set f = ws7.Cells.Find(What:=section & " 狀態", LookIn:=xlValues, LookAt:=xlPart)
+    If f Is Nothing Then MsgBox "無法在 S7 找到 " & section & " 區塊。", vbExclamation: Exit Sub
+    
+    Dim targetRow As Long: targetRow = f.Row + 2 + 4
+    Dim headerRow As Long: headerRow = f.Row + 2
+    
+    Dim fPath As Variant
+    fPath = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "匯入維修保養紀錄 (" & section & ")")
+    If fPath = False Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    
+    Dim dictEquip As Object, dictProcCount As Object
+    Set dictEquip = CreateObject("Scripting.Dictionary")
+    Set dictProcCount = CreateObject("Scripting.Dictionary")
+    LoadS0Settings ws0, dictEquip, dictProcCount
+    
+    Dim wbM As Workbook: Set wbM = Workbooks.Open(CStr(fPath), ReadOnly:=True)
+    Dim wsM As Worksheet: Set wsM = wbM.Worksheets(1)
+    
+    Dim dictProcTime As Object: Set dictProcTime = CreateObject("Scripting.Dictionary")
+    Dim lastRowM As Long: lastRowM = wsM.Cells(wsM.Rows.count, 2).End(xlUp).Row
+    Dim rm As Long
+    Dim pName As String
+    
+    For rm = 2 To lastRowM
+        Dim typeStr As String: typeStr = Trim$(CStr(wsM.Cells(rm, 6).Value))
+        If InStr(1, typeStr, "A-維修", vbTextCompare) > 0 Then
+            Dim eqID As String: eqID = UCase(Trim$(CStr(wsM.Cells(rm, 2).Value)))
+            Dim dur As Double: dur = val(wsM.Cells(rm, 9).Value)
+            
+            If dictEquip.exists(eqID) Then
+                pName = dictEquip(eqID)
+                If dictProcTime.exists(pName) Then
+                    dictProcTime(pName) = dictProcTime(pName) + dur
+                Else
+                    dictProcTime.Add pName, dur
+                End If
+            End If
+        End If
+    Next rm
+    wbM.Close False
+    
+    Dim dailyRunHours As Double: dailyRunHours = val(ws0.Range("B2").Value)
+    If dailyRunHours <= 0 Then dailyRunHours = 24
+    Dim daysImported As Double: daysImported = val(ws7.Range("B2").Value)
+    If daysImported <= 0 Then daysImported = 1
+    
+    ' Fix: Detect last column from headerRow + 1 (Process Name Row) to be safer
+    Dim lastCol7 As Long: lastCol7 = ws7.Cells(headerRow + 1, ws7.Columns.count).End(xlToLeft).Column
+    Dim c7 As Long, updateCount As Long: updateCount = 0
+    
+    Dim debugMsg As String: debugMsg = ""
+    Dim debugCount As Long: debugCount = 0
+    
+    For c7 = 2 To lastCol7
+        Dim mName As String: mName = Trim$(CStr(ws7.Cells(headerRow + 1, c7).Value))
+        pName = mName
+        
+        Dim isFound As Boolean: isFound = False
+        If pName <> "" And dictProcTime.exists(pName) And dictProcCount.exists(pName) Then
+            Dim totalTime As Double: totalTime = dictProcTime(pName)
+            Dim totalEquip As Long: totalEquip = dictProcCount(pName)
+            If totalEquip > 0 Then
+                Dim avgTimePerEq As Double: avgTimePerEq = totalTime / totalEquip
+                Dim downRatio As Double: downRatio = (avgTimePerEq / dailyRunHours) / daysImported
+                ws7.Cells(targetRow, c7).Value = downRatio
+                updateCount = updateCount + 1
+                isFound = True
+            End If
+        End If
+        
+        ' Specific Debug for uBMU-TP or failed items
+        If InStr(1, pName, "uBMU", vbTextCompare) > 0 Then
+             debugMsg = debugMsg & "Check " & pName & ": Found in Data? " & dictProcTime.exists(pName) & ", Updated? " & isFound & vbCrLf
+        End If
+    Next c7
+    
+    Application.ScreenUpdating = True
+    
+    If updateCount = 0 Or debugMsg <> "" Then
+        MsgBox "匯入 " & section & " 維修資料完成！已更新 " & updateCount & " 欄。" & vbCrLf & _
+               "重點檢查訊息：" & vbCrLf & debugMsg, vbInformation
+    Else
+        MsgBox "匯入 " & section & " 維修資料完成！已更新 " & updateCount & " 欄。", vbInformation
+    End If
+    Exit Sub
+EH:
+    If Not wbM Is Nothing Then wbM.Close False
+    Application.ScreenUpdating = True
+    MsgBox "匯入錯誤: " & Err.Description, vbExclamation
+End Sub
+
+Private Sub PB_S7_ImportAuto_Generic(ByVal section As String, ByVal rowOffset As Long)
+    On Error GoTo EH
+    
+    Dim ws0 As Worksheet: Set ws0 = ThisWorkbook.Worksheets(S0)
+    Dim ws7 As Worksheet: Set ws7 = ThisWorkbook.Worksheets(S7)
+    
+    Dim f As Range
+    Set f = ws7.Cells.Find(What:=section & " 狀態", LookIn:=xlValues, LookAt:=xlPart)
+    If f Is Nothing Then MsgBox "無法在 S7 找到 " & section, vbExclamation: Exit Sub
+    
+    Dim targetRow As Long: targetRow = f.Row + 2 + 4
+    Dim headerRow As Long: headerRow = f.Row + 2
+    
+    Dim fPath As Variant
+    fPath = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "匯入自動上報 (" & section & ")")
+    If fPath = False Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    
+    Dim dictEquip As Object, dictProcCount As Object
+    Set dictEquip = CreateObject("Scripting.Dictionary")
+    Set dictProcCount = CreateObject("Scripting.Dictionary")
+    LoadS0Settings ws0, dictEquip, dictProcCount
+    
+    Dim workHoursBase As Double: workHoursBase = val(ws0.Range("B2").Value)
+    If workHoursBase <= 0 Then workHoursBase = 24
+    
+    Dim wbA As Workbook: Set wbA = Workbooks.Open(CStr(fPath), ReadOnly:=True)
+    Dim wsA As Worksheet: Set wsA = wbA.Worksheets(1)
+    
+    Dim dictProcSum As Object: Set dictProcSum = CreateObject("Scripting.Dictionary")
+    Dim lastRowA As Long: lastRowA = wsA.Cells(wsA.Rows.count, 2).End(xlUp).Row
+    Dim rA As Long
+    Dim pName As String
+    
+    For rA = 2 To lastRowA
+        Dim eqID_A As String: eqID_A = UCase(Trim$(CStr(wsA.Cells(rA, 2).Value)))
+        If dictEquip.exists(eqID_A) Then
+            Dim startT As Double: startT = CDbl(wsA.Cells(rA, 7).Value)
+            Dim endT As Double: endT = CDbl(wsA.Cells(rA, 8).Value)
+            Dim dur As Double: dur = 0
+            If endT > startT Then dur = (endT - startT) * 24
+            
+            If dur > 0 Then
+                pName = dictEquip(eqID_A)
+                If dictProcSum.exists(pName) Then
+                    dictProcSum(pName) = dictProcSum(pName) + dur
+                Else
+                    dictProcSum.Add pName, dur
+                End If
+            End If
+        End If
+    Next rA
+    wbA.Close False
+    
+    Dim daysImported As Double: daysImported = val(ws7.Range("B2").Value)
+    If daysImported <= 0 Then daysImported = 1
+    
+    ' Fix: Last column from Process Name Row
+    Dim lastCol7 As Long: lastCol7 = ws7.Cells(headerRow + 1, ws7.Columns.count).End(xlToLeft).Column
+    Dim c7 As Long, updateCount As Long: updateCount = 0
+    Dim debugMsg As String: debugMsg = ""
+    
+    For c7 = 2 To lastCol7
+        Dim mName As String: mName = Trim$(CStr(ws7.Cells(headerRow + 1, c7).Value))
+        pName = mName
+        
+        Dim isFound As Boolean: isFound = False
+        If pName <> "" And dictProcSum.exists(pName) And dictProcCount.exists(pName) Then
+            Dim totalDT As Double: totalDT = dictProcSum(pName)
+            Dim procEqCount As Long: procEqCount = dictProcCount(pName)
+            If procEqCount > 0 Then
+                Dim avgDT As Double: avgDT = totalDT / procEqCount
+                Dim ratio As Double: ratio = (avgDT / workHoursBase) / daysImported
+                ws7.Cells(targetRow, c7).Value = ratio
+                updateCount = updateCount + 1
+                isFound = True
+            End If
+        End If
+        
+        ' Specific Debug
+        If InStr(1, pName, "uBMU", vbTextCompare) > 0 Then
+             debugMsg = debugMsg & "Check " & pName & ": Found in Data? " & dictProcSum.exists(pName) & ", Updated? " & isFound & vbCrLf
+        End If
+    Next c7
+    
+    Application.ScreenUpdating = True
+    
+    If updateCount = 0 Or debugMsg <> "" Then
+        MsgBox "匯入 " & section & " 自動上報完成！更新 " & updateCount & " 欄。" & vbCrLf & _
+               "重點檢查訊息：" & vbCrLf & debugMsg, vbInformation
+    Else
+        MsgBox "匯入 " & section & " 自動上報完成！更新 " & updateCount & " 欄。", vbInformation
+    End If
+    Exit Sub
+EH:
+    If Not wbA Is Nothing Then wbA.Close False
+    Application.ScreenUpdating = True
+    MsgBox "匯入錯誤: " & Err.Description, vbExclamation
+End Sub
+
+Private Sub LoadS0Settings(ByVal ws0 As Worksheet, ByRef dictEquip As Object, ByRef dictProcCount As Object)
+    Dim lastRow0 As Long: lastRow0 = ws0.Cells(ws0.Rows.count, 1).End(xlUp).Row
+    Dim r0 As Long, c0 As Long
+    For r0 = 4 To lastRow0
+        Dim procName As String: procName = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        If procName <> "" Then
+            Dim lastCol0 As Long: lastCol0 = ws0.Cells(r0, ws0.Columns.count).End(xlToLeft).Column
+            Dim eCount As Long: eCount = 0
+            For c0 = 3 To lastCol0
+                Dim eID As String: eID = Trim$(CStr(ws0.Cells(r0, c0).Value))
+                If eID <> "" Then
+                    eCount = eCount + 1
+                    If Not dictEquip.exists(UCase(eID)) Then
+                        dictEquip.Add UCase(eID), procName
+                    End If
+                End If
+            Next c0
+            If dictProcCount.exists(procName) Then
+                dictProcCount(procName) = dictProcCount(procName) + eCount
+            Else
+                dictProcCount.Add procName, eCount
+            End If
+        End If
+    Next r0
+End Sub
+Public Sub PB_S7_ImportDT()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim f As Variant
+    f = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "選擇機故資料檔案 (周統計)")
+    If f = False Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+    
+    Dim wb As Workbook: Set wb = Workbooks.Open(CStr(f), ReadOnly:=True)
+    Dim wsSrc As Worksheet
+    
+    On Error Resume Next
+    Set wsSrc = wb.Worksheets("機故統計")
+    On Error GoTo EH
+    
+    If wsSrc Is Nothing Then
+        wb.Close False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "找不到「機故統計」工作表。", vbExclamation
+        Exit Sub
+    End If
+    
+    Dim wsdDT7 As Worksheet: Set wsdDT7 = GetOrCreateSheet(SD_DT7)
+    MakeVeryHidden wsdDT7
+    wsdDT7.Cells.Clear
+    
+    Dim lastR As Long: lastR = wsSrc.Cells(wsSrc.Rows.count, 1).End(xlUp).Row
+    If lastR < 2 Then
+        wb.Close False
+        Application.DisplayAlerts = True
+        Application.ScreenUpdating = True
+        MsgBox "匯入檔案無資料。", vbExclamation
+        Exit Sub
+    End If
+    
+    wsdDT7.Range("A1").Value = "Machine"
+    wsdDT7.Range("B1").Value = "TotalDownTime"
+    
+    Dim r As Long, outR As Long
+    outR = 2
+    For r = 2 To lastR
+        wsdDT7.Cells(outR, 1).Value = wsSrc.Cells(r, 1).Value
+        wsdDT7.Cells(outR, 2).Value = wsSrc.Cells(r, 4).Value
+        outR = outR + 1
+    Next r
+    
+    wb.Close False
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    
+    MsgBox "已匯入機故資料 (周) (" & (outR - 2) & " 筆)。", vbInformation
+    Exit Sub
+EH:
+    If Not wb Is Nothing Then
+        On Error Resume Next
+        wb.Close SaveChanges:=False
+        On Error GoTo 0
+    End If
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    MsgBox "匯入發生錯誤：" & vbCrLf & Err.Description, vbExclamation
+End Sub
+
+Public Sub PB_S7_CreateCharts()
+    On Error GoTo EH
+    EnsureBaseSheets
+    Application.ScreenUpdating = False
+    
+    Dim ws5 As Worksheet: Set ws5 = ThisWorkbook.Worksheets(S5)
+    Dim ws7 As Worksheet: Set ws7 = ThisWorkbook.Worksheets(S7)
+    Dim ws2 As Worksheet: Set ws2 = ThisWorkbook.Worksheets(S2)
+    Dim wsdDT7 As Worksheet: Set wsdDT7 = GetOrCreateSheet(SD_DT7)
+    
+    ' 1. Get Parameters (Daily Hours -> Weekly Minutes)
+    ' [Update] Daily Hours is now at B8 (Moved down 1 row)
+    Dim dailyHours As Double
+    dailyHours = val(ws2.Range("B8").Value)
+    If dailyHours <= 0 Then dailyHours = 20
+    
+    ' WEEKLY Minutes = DailyHours * 60 * 7
+    Dim weeklyMinutes As Double
+    weeklyMinutes = dailyHours * 60 * 7
+    
+    ' 2. Find S5 Data
+    Dim f As Range
+    Set f = ws5.Cells.Find(What:="換線後機台狀態", LookIn:=xlValues, LookAt:=xlPart)
+    If f Is Nothing Then
+        Application.ScreenUpdating = True
+        MsgBox "無法在第5頁找到「換線後機台狀態」。", vbExclamation
+        Exit Sub
+    End If
+    
+    Dim startRow As Long: startRow = f.Row + 2
+    Dim lastRowS5 As Long: lastRowS5 = ws5.Cells(ws5.Rows.count, f.Column).End(xlUp).Row
+    If lastRowS5 < startRow Then
+        Application.ScreenUpdating = True
+        MsgBox "第5頁清單無資料。", vbExclamation
+        Exit Sub
+    End If
+    
+    ' 3. Aggregate (Weekly Scale)
+    Dim targetPOL_Day As Double, targetBMU_Day As Double
+    targetPOL_Day = val(ws5.Cells(8, 2).Value)
+    targetBMU_Day = val(ws5.Cells(9, 2).Value)
+    
+    Dim targetPOL As Double: targetPOL = targetPOL_Day * 7
+    Dim targetBMU As Double: targetBMU = targetBMU_Day * 7
+    
+    Dim fullPOL As Double, fullBMU As Double
+    Dim lossPOL As Double, lossBMU As Double
+    
+    Dim r As Long
+    For r = startRow To lastRowS5
+        Dim mName As String: mName = Trim$(CStr(ws5.Cells(r, 12).Value))
+        Dim prod As String: prod = Trim$(CStr(ws5.Cells(r, 15).Value))
+        Dim capP_Day As Double: capP_Day = val(ws5.Cells(r, 13).Value)
+        Dim capB_Day As Double: capB_Day = val(ws5.Cells(r, 14).Value)
+        
+        Dim capP As Double: capP = capP_Day * 7
+        Dim capB As Double: capB = capB_Day * 7
+        
+        Dim dt As Double: dt = 0
+        Dim dtRow As Variant
+        dtRow = Application.Match(mName, wsdDT7.Columns(1), 0)
+        If Not IsError(dtRow) Then
+            dt = val(wsdDT7.Cells(dtRow, 2).Value)
+        End If
+        
+        If InStr(1, prod, "uPOL", vbTextCompare) > 0 Then
+            fullPOL = fullPOL + capP
+            lossPOL = lossPOL + (dt / weeklyMinutes) * capP
+        ElseIf InStr(1, prod, "uBMU", vbTextCompare) > 0 Then
+            fullBMU = fullBMU + capB
+            lossBMU = lossBMU + (dt / weeklyMinutes) * capB
+        End If
+    Next r
+    
+    Dim effPOL As Double: effPOL = fullPOL - lossPOL
+    Dim effBMU As Double: effBMU = fullBMU - lossBMU
+    If effPOL < 0 Then effPOL = 0
+    If effBMU < 0 Then effBMU = 0
+    
+    ' 4. Write Data Table (F3:J5)
+    ws7.Range("D3:J10").Clear
+    
+    ws7.Cells(3, 6).Value = "產品"
+    ws7.Cells(3, 7).Value = "目標產能(周)"
+    ws7.Cells(3, 8).Value = "總產能(周)"
+    ws7.Cells(3, 9).Value = "有效產能"
+    ws7.Cells(3, 10).Value = "損失產能"
+    ws7.Range("F3:J3").Font.Bold = True
+    ws7.Range("F3:J3").Interior.Color = RGB(230, 230, 230)
+    
+    ws7.Cells(4, 6).Value = "uPOL"
+    ws7.Cells(4, 7).Value = targetPOL
+    ws7.Cells(4, 8).Value = fullPOL
+    ws7.Cells(4, 9).Value = effPOL
+    ws7.Cells(4, 10).Value = lossPOL
+    
+    ws7.Cells(5, 6).Value = "uBMU"
+    ws7.Cells(5, 7).Value = targetBMU
+    ws7.Cells(5, 8).Value = fullBMU
+    ws7.Cells(5, 9).Value = effBMU
+    ws7.Cells(5, 10).Value = lossBMU
+    
+    ApplyBorder ws7.Range("F3:J5")
+    
+    ' 5. Generate Charts
+    DeleteAllCharts ws7
+    
+    Dim chObj1 As ChartObject
+    Set chObj1 = ws7.ChartObjects.Add(Left:=50, Top:=200, width:=400, height:=300)
+    
+    With chObj1.Chart
+        .ChartType = xlColumnStacked
+        .HasTitle = True
+        .ChartTitle.Text = "機台總產能(周) vs 目標產能"
+        
+        Do While .SeriesCollection.count > 0
+            .SeriesCollection(1).Delete
+        Loop
+        
+        With .SeriesCollection.NewSeries
+            .name = ws7.Range("H3").Value
+            .XValues = ws7.Range("F4:F5")
+            .Values = ws7.Range("H4:H5")
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(50, 100, 200)
+        End With
+        
+        With .SeriesCollection.NewSeries
+            .name = ws7.Range("G3").Value
+            .XValues = ws7.Range("F4:F5")
+            .Values = ws7.Range("G4:G5")
+            .ChartType = xlLine
+            .Format.Line.ForeColor.RGB = RGB(255, 0, 0)
+        End With
+    End With
+    
+    Dim chObj2 As ChartObject
+    Set chObj2 = ws7.ChartObjects.Add(Left:=500, Top:=200, width:=400, height:=300)
+    
+    With chObj2.Chart
+        .ChartType = xlColumnStacked
+        .HasTitle = True
+        .ChartTitle.Text = "有效產能(周) vs 損失產能"
+        
+        Do While .SeriesCollection.count > 0
+            .SeriesCollection(1).Delete
+        Loop
+        
+        With .SeriesCollection.NewSeries
+            .name = ws7.Range("I3").Value
+            .XValues = ws7.Range("F4:F5")
+            .Values = ws7.Range("I4:I5")
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(100, 200, 100)
+        End With
+        
+        With .SeriesCollection.NewSeries
+            .name = ws7.Range("J3").Value
+            .XValues = ws7.Range("F4:F5")
+            .Values = ws7.Range("J4:J5")
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(255, 0, 0)
+        End With
+        
+        With .SeriesCollection.NewSeries
+            .name = ws7.Range("G3").Value
+            .XValues = ws7.Range("F4:F5")
+            .Values = ws7.Range("G4:G5")
+            .ChartType = xlLine
+            .Format.Line.ForeColor.RGB = RGB(0, 0, 0)
+        End With
+    End With
+    
+    Application.ScreenUpdating = True
+    MsgBox "圖表(周)已生成。", vbInformation
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成圖表錯誤：" & Err.Description, vbExclamation
+End Sub
+
+Public Sub PB_SaveSheet7AsXLSX(): SaveOneSheetAsXLSX S7: End Sub
+
+Private Sub DeleteAllCharts(ByVal ws As Worksheet)
+    Dim ch As ChartObject
+    For Each ch In ws.ChartObjects
+        ch.Delete
+    Next ch
+End Sub
+Public Sub PB_GenerateSheet8()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim ws7 As Worksheet: Set ws7 = ThisWorkbook.Worksheets(S7)
+    Dim ws8 As Worksheet: Set ws8 = ThisWorkbook.Worksheets(S8)
+    Dim ws1 As Worksheet: Set ws1 = ThisWorkbook.Worksheets(S1)
+    
+    Application.ScreenUpdating = False
+    PB_ClearSheet ws8
+    
+    ' Check S7
+    If ws7.Cells(1, 1).Value = "" Then
+        MsgBox "第7頁無資料，無法生成第8頁。", vbExclamation
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+    
+    ws8.Range("A1").Value = "產能平衡圖 - 第8頁 (含TP換線 - Before/Now/Future)"
+    ws8.Range("A1:H1").Merge
+    ws8.Range("A1").Font.Bold = True
+    ws8.Range("A1").Font.Size = 16
+    ws8.Rows(1).RowHeight = 26
+    
+    ' Button to S9
+    Dim anchor As Range: Set anchor = ws8.Range("G2")
+    AddFormButton ws8, BTN_S8_TO_S9, "產生第9頁 (日圖表)", "PB_GenerateSheet9", anchor.Left, anchor.Top, 220, 26
+    AddFormButton ws8, "btnPB_S8_Save", "另存新檔 (.xlsx)", "PB_SaveSheet8AsXLSX", anchor.Left, anchor.Top + 32, 220, 26
+    
+    ' Global Params (Same as S5)
+    ws8.Cells(2, 1).Value = "產品名稱"
+    ws8.Cells(2, 2).Value = "uPOL-TP"
+    ws8.Cells(2, 3).Value = "uBMU-TP"
+    
+    ws8.Cells(3, 1).Value = "一片幾顆"
+    ws8.Cells(3, 2).Value = ws1.Cells(8, 2).Value
+    ws8.Cells(3, 3).Value = ws1.Cells(8, 3).Value
+    
+    ws8.Range("A2:C3").Borders.LineStyle = xlContinuous
+    ws8.Range("A2:A3").Font.Bold = True
+    ws8.Range("A2:A3").Interior.Color = RGB(240, 240, 240)
+
+    ' Build 3 Sections
+    ' S7 Sections start approx at: Before(Row 5), Now(Row ~20?), Future(Row ~35?)
+    ' We need to find S7 headers dynamically.
+    
+    Dim curTop As Long: curTop = 5
+    curTop = BuildS8Section(ws8, ws7, "Before", curTop)
+    curTop = curTop + 3
+    curTop = BuildS8Section(ws8, ws7, "Now", curTop)
+    curTop = curTop + 3
+    curTop = BuildS8Section(ws8, ws7, "Future", curTop)
+    
+    SaveSheetHash S8, ComputeSheetHash_Safe(ws8)
+    
+    Application.ScreenUpdating = True
+    MsgBox "第8頁已生成 (B/N/F)。", vbInformation
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成第8頁發生錯誤:" & vbCrLf & Err.Description, vbExclamation
+End Sub
+
+Private Function BuildS8Section(ByVal ws8 As Worksheet, ByVal ws7 As Worksheet, ByVal sectionName As String, ByVal outStartRow As Long) As Long
+    ' 1. Header
+    ws8.Cells(outStartRow, 1).Value = sectionName & " 狀態 (TP換線)"
+    ws8.Range(ws8.Cells(outStartRow, 1), ws8.Cells(outStartRow, 5)).Merge
+    ws8.Cells(outStartRow, 1).Font.Bold = True
+    ws8.Cells(outStartRow, 1).Interior.Color = RGB(200, 220, 240)
+    
+    ' 2. Buttons
+    ' Update: Move down by 1 row (outStartRow + 1)
+    ' Update: Full button text "匯入TP換線統計資料(...)"
+    Dim btnPrefix As String: btnPrefix = "btnS8_" & sectionName
+    Dim anchor As Range: Set anchor = ws8.Cells(outStartRow + 1, 8)
+    
+    AddFormButton ws8, btnPrefix & "_Imp", "匯入TP換線統計資料(" & sectionName & ")", "PB_S8_ImportTP_" & sectionName, anchor.Left, anchor.Top, 200, 24
+    AddFormButton ws8, btnPrefix & "_Calc", "計算換線(" & sectionName & ")", "PB_S8_Calc_" & sectionName, anchor.Left + 210, anchor.Top, 140, 24
+    
+    ' 3. Summary Table (Result)
+    Dim sumRow As Long: sumRow = outStartRow + 2
+    ws8.Cells(sumRow, 1).Value = "目前狀態 (計算結果顯示於此)"
+    ws8.Range(ws8.Cells(sumRow, 1), ws8.Cells(sumRow, 4)).Merge
+    ws8.Cells(sumRow, 1).Font.Bold = True
+    
+    ' 4. List Headers
+    Dim listHeadRow As Long: listHeadRow = sumRow + 5
+    ' Left: Current
+    ws8.Cells(listHeadRow, 1).Value = "目前機台狀態"
+    ws8.Range(ws8.Cells(listHeadRow, 1), ws8.Cells(listHeadRow, 4)).Merge
+    ws8.Range(ws8.Cells(listHeadRow, 1), ws8.Cells(listHeadRow, 4)).Interior.Color = RGB(220, 220, 220)
+    ws8.Range(ws8.Cells(listHeadRow, 1), ws8.Cells(listHeadRow, 4)).HorizontalAlignment = xlCenter
+    
+    ws8.Cells(listHeadRow + 1, 1).Value = "機台"
+    ws8.Cells(listHeadRow + 1, 2).Value = "目前產品"
+    ws8.Cells(listHeadRow + 1, 3).Value = "目前產能"
+    ws8.Cells(listHeadRow + 1, 4).Value = "換線決策"
+    ws8.Range(ws8.Cells(listHeadRow + 1, 1), ws8.Cells(listHeadRow + 1, 4)).Font.Bold = True
+    ws8.Range(ws8.Cells(listHeadRow + 1, 1), ws8.Cells(listHeadRow + 1, 4)).Interior.Color = RGB(240, 240, 240)
+    
+    ' Right: Future
+    ws8.Cells(listHeadRow, 12).Value = "換線後機台狀態"
+    ws8.Range(ws8.Cells(listHeadRow, 12), ws8.Cells(listHeadRow, 14)).Merge
+    ws8.Range(ws8.Cells(listHeadRow, 12), ws8.Cells(listHeadRow, 14)).Interior.Color = RGB(220, 220, 220)
+    ws8.Range(ws8.Cells(listHeadRow, 12), ws8.Cells(listHeadRow, 14)).HorizontalAlignment = xlCenter
+
+    ws8.Cells(listHeadRow + 1, 12).Value = "機台"
+    ws8.Cells(listHeadRow + 1, 13).Value = "分配產品"
+    ws8.Cells(listHeadRow + 1, 14).Value = "預估產能"
+    ws8.Range(ws8.Cells(listHeadRow + 1, 12), ws8.Cells(listHeadRow + 1, 14)).Font.Bold = True
+    ws8.Range(ws8.Cells(listHeadRow + 1, 12), ws8.Cells(listHeadRow + 1, 14)).Interior.Color = RGB(240, 240, 240)
+
+    ' Note: No data rows yet (User must Import)
+    
+    BuildS8Section = listHeadRow + 50
+End Function
+
+Public Sub PB_S8_ImportTP_Before(): PB_S8_ImportTP_Generic "Before": End Sub
+Public Sub PB_S8_ImportTP_Now():    PB_S8_ImportTP_Generic "Now": End Sub
+Public Sub PB_S8_ImportTP_Future(): PB_S8_ImportTP_Generic "Future": End Sub
+
+Public Sub PB_S8_Calc_Before(): PB_S8_Calc_Generic "Before": End Sub
+Public Sub PB_S8_Calc_Now():    PB_S8_Calc_Generic "Now": End Sub
+Public Sub PB_S8_Calc_Future(): PB_S8_Calc_Generic "Future": End Sub
+
+Private Sub PB_S8_ImportTP_Generic(ByVal section As String)
+    On Error GoTo EH
+    
+    Dim ws8 As Worksheet: Set ws8 = ThisWorkbook.Worksheets(S8)
+    Dim ws3 As Worksheet: Set ws3 = ThisWorkbook.Worksheets(S3)
+    Dim ws7 As Worksheet: Set ws7 = ThisWorkbook.Worksheets(S7)
+    
+    ' 1. Find Current Section in S8
+    Dim f As Range
+    Set f = ws8.Cells.Find(What:=section & " 狀態 (TP換線)", LookIn:=xlValues, LookAt:=xlPart)
+    If f Is Nothing Then MsgBox "無法在 S8 找到 " & section, vbExclamation: Exit Sub
+    
+    Dim baseRow As Long: baseRow = f.Row
+    Dim summaryRow As Long: summaryRow = baseRow + 2
+    Dim listHeaderRow As Long: listHeaderRow = baseRow + 5
+    Dim listStartRow As Long: listStartRow = listHeaderRow + 2
+    
+    ' 2. Determine Next Section Row (Boundary for Clear)
+    Dim nextSectionName As String
+    Select Case section
+        Case "Before": nextSectionName = "Now"
+        Case "Now": nextSectionName = "Future"
+        Case "Future": nextSectionName = ""
+    End Select
+    
+    Dim nextSectionRow As Long
+    If nextSectionName <> "" Then
+        Dim fNext As Range
+        ' Search specifically for the NEXT section header
+        Set fNext = ws8.Cells.Find(What:=nextSectionName & " 狀態 (TP換線)", LookIn:=xlValues, LookAt:=xlPart)
+        If Not fNext Is Nothing Then
+            nextSectionRow = fNext.Row - 1
+        Else
+            ' Fallback: If structure is broken, assume huge
+            nextSectionRow = 10000
+        End If
+    Else
+        ' Last section (Future), go to reasonable end or used range
+        nextSectionRow = ws8.UsedRange.Rows.count + 100
+        If nextSectionRow < listStartRow + 500 Then nextSectionRow = listStartRow + 500
+    End If
+    
+    ' Select File
+    Dim fPath As Variant
+    fPath = Application.GetOpenFilename("Excel Files (*.xlsx;*.xlsm;*.xls),*.xlsx;*.xlsm;*.xls", , "匯入 TP 資料 (" & section & ")")
+    If fPath = False Then Exit Sub
+    
+    Application.ScreenUpdating = False
+    
+    ' 3. Init/Update SD_TP (Hidden)
+    Dim wsdTP As Worksheet: Set wsdTP = GetOrCreateSheet(SD_TP)
+    CleanSDTP_Section wsdTP, section
+    
+    Dim wbSrc As Workbook: Set wbSrc = Workbooks.Open(CStr(fPath), ReadOnly:=True)
+    Dim wsSrc As Worksheet: Set wsSrc = wbSrc.Worksheets(1)
+    
+    Dim lastR As Long: lastR = wsSrc.Cells(wsSrc.Rows.count, 1).End(xlUp).Row
+    Dim tpOutRow As Long: tpOutRow = wsdTP.Cells(wsdTP.Rows.count, 1).End(xlUp).Row + 1
+    If tpOutRow < 2 Then tpOutRow = 2
+    
+    ' Check Headers
+    If wsdTP.Range("A1").Value = "" Then
+        wsdTP.Range("A1").Value = "Machine"
+        wsdTP.Range("B1").Value = "Cap_uPOL"
+        wsdTP.Range("C1").Value = "Cap_uBMU"
+        wsdTP.Range("D1").Value = "CurProd"
+        wsdTP.Range("E1").Value = "CanSwitch"
+        wsdTP.Range("F1").Value = "Section"
+    End If
+    
+    Dim sumImportPOL As Double: sumImportPOL = 0
+    Dim sumImportBMU As Double: sumImportBMU = 0
+    
+    ' Clear List Area (Safe Range)
+    ' Subtract padding rows (e.g. 2 rows buffer) to avoid hitting header
+    Dim clearEndRow As Long: clearEndRow = nextSectionRow - 2
+    If clearEndRow < listStartRow Then clearEndRow = listStartRow ' Nothing to clear
+    
+    If clearEndRow >= listStartRow Then
+        ws8.Range("A" & listStartRow & ":E" & clearEndRow).ClearContents
+        ws8.Range("A" & listStartRow & ":E" & clearEndRow).Validation.Delete
+        ws8.Range("A" & listStartRow & ":E" & clearEndRow).Borders.LineStyle = xlNone
+        ws8.Range("L" & listStartRow & ":N" & clearEndRow).ClearContents
+        ws8.Range("L" & listStartRow & ":N" & clearEndRow).Borders.LineStyle = xlNone
+    End If
+    
+    Dim currentListRow As Long: currentListRow = listStartRow
+    
+    Dim r As Long
+    For r = 2 To lastR
+        Dim mName As String: mName = Trim$(CStr(wsSrc.Cells(r, 1).Value))
+        If mName <> "" Then
+            Dim cPOL As Double: cPOL = val(wsSrc.Cells(r, 7).Value)
+            Dim cBMU As Double: cBMU = val(wsSrc.Cells(r, 8).Value)
+            Dim curP As String: curP = Trim$(CStr(wsSrc.Cells(r, 9).Value))
+            Dim canSw As String: canSw = Trim$(CStr(wsSrc.Cells(r, 10).Value))
+            
+            wsdTP.Cells(tpOutRow, 1).Value = mName
+            wsdTP.Cells(tpOutRow, 2).Value = cPOL
+            wsdTP.Cells(tpOutRow, 3).Value = cBMU
+            wsdTP.Cells(tpOutRow, 4).Value = curP
+            wsdTP.Cells(tpOutRow, 5).Value = canSw
+            wsdTP.Cells(tpOutRow, 6).Value = section
+            tpOutRow = tpOutRow + 1
+            
+            Dim curCap As Double: curCap = 0
+            If InStr(1, curP, "uPOL", vbTextCompare) > 0 Then
+                curCap = cPOL
+                sumImportPOL = sumImportPOL + cPOL
+            ElseIf InStr(1, curP, "uBMU", vbTextCompare) > 0 Then
+                curCap = cBMU
+                sumImportBMU = sumImportBMU + cBMU
+            End If
+            
+            ' Safety Check: Don't overwrite next section
+            If currentListRow < nextSectionRow - 1 Then
+                ws8.Cells(currentListRow, 1).Value = mName
+                ws8.Cells(currentListRow, 2).Value = curP
+                ws8.Cells(currentListRow, 3).Value = curCap
+                
+                Dim cellDec As Range: Set cellDec = ws8.Cells(currentListRow, 4)
+                If UCase(canSw) = "X" Then
+                    cellDec.Value = "無法換線"
+                    cellDec.Font.Color = RGB(150, 150, 150)
+                Else
+                    cellDec.Value = "維持現況"
+                    With cellDec.Validation
+                        .Delete
+                        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="維持現況,換線"
+                        .InCellDropdown = True
+                    End With
+                    cellDec.Font.Color = vbBlack
+                End If
+                currentListRow = currentListRow + 1
+            End If
+        End If
+    Next r
+    
+    wbSrc.Close False
+    
+    If currentListRow > listStartRow Then
+        ApplyBorder ws8.Range("A" & listStartRow - 1 & ":D" & (currentListRow - 1))
+        ws8.Range("C" & listStartRow & ":C" & (currentListRow - 1)).NumberFormat = "#,##0"
+    End If
+    
+    ' 4. Update Summary Table
+    Dim tPOL As Double: tPOL = GetTargetFromS7(ws7, section, "uPOL-TP")
+    Dim tBMU As Double: tBMU = GetTargetFromS7(ws7, section, "uBMU-TP")
+    Dim mPOL As Double: mPOL = val(ws8.Cells(3, 2).Value)
+    Dim mBMU As Double: mBMU = val(ws8.Cells(3, 3).Value)
+    Dim gPOL As Double: gPOL = tPOL * mPOL
+    Dim gBMU As Double: gBMU = tBMU * mBMU
+    
+    ws8.Range("A" & summaryRow & ":E" & (summaryRow + 3)).Clear
+    
+    ws8.Cells(summaryRow, 1).Value = "產品"
+    ws8.Cells(summaryRow, 2).Value = "目標總產能"
+    ws8.Cells(summaryRow, 3).Value = "目前總產能"
+    ws8.Cells(summaryRow, 4).Value = "缺少產能"
+    ws8.Cells(summaryRow, 5).Value = "達成率"
+    ws8.Range("A" & summaryRow & ":E" & summaryRow).Font.Bold = True
+    ws8.Range("A" & summaryRow & ":E" & summaryRow).Interior.Color = RGB(220, 220, 220)
+    
+    Dim rS As Long: rS = summaryRow + 1
+    ws8.Cells(rS, 1).Value = "uPOL"
+    ws8.Cells(rS, 2).Value = gPOL
+    ws8.Cells(rS, 3).Value = sumImportPOL
+    ws8.Cells(rS, 4).Formula = "=C" & rS & "-B" & rS
+    ws8.Cells(rS, 5).Formula = "=IFERROR(C" & rS & "/B" & rS & ",0)"
+    
+    rS = rS + 1
+    ws8.Cells(rS, 1).Value = "uBMU"
+    ws8.Cells(rS, 2).Value = gBMU
+    ws8.Cells(rS, 3).Value = sumImportBMU
+    ws8.Cells(rS, 4).Formula = "=C" & rS & "-B" & rS
+    ws8.Cells(rS, 5).Formula = "=IFERROR(C" & rS & "/B" & rS & ",0)"
+    
+    ApplyBorder ws8.Range("A" & summaryRow & ":E" & rS)
+    ws8.Range("B" & (summaryRow + 1) & ":D" & rS).NumberFormat = "#,##0"
+    ws8.Range("E" & (summaryRow + 1) & ":E" & rS).NumberFormat = "0.0%"
+    
+    Application.ScreenUpdating = True
+    MsgBox "已匯入 " & section & " 資料並更新列表。", vbInformation
+    Exit Sub
+EH:
+    If Not wbSrc Is Nothing Then wbSrc.Close False
+    Application.ScreenUpdating = True
+    MsgBox "匯入錯誤: " & Err.Description, vbExclamation
+End Sub
+Private Sub CleanSDTP_Section(ByVal wsdTP As Worksheet, ByVal section As String)
+    ' Remove rows in SD_TP where Col 6 == section
+    Dim lastR As Long: lastR = wsdTP.Cells(wsdTP.Rows.count, 1).End(xlUp).Row
+    Dim r As Long
+    For r = lastR To 2 Step -1
+        If wsdTP.Cells(r, 6).Value = section Then
+            wsdTP.Rows(r).Delete
+        End If
+    Next r
+End Sub
+Private Function GetTargetFromS7(ByVal ws7 As Worksheet, ByVal section As String, ByVal prodName As String) As Double
+    ' 1. Find Section
+    Dim f As Range
+    Set f = ws7.Cells.Find(What:=section & " 狀態", LookIn:=xlValues, LookAt:=xlPart)
+    If f Is Nothing Then GetTargetFromS7 = 0: Exit Function
+    
+    Dim headerRow As Long: headerRow = f.Row + 2
+    Dim targetRow As Long: targetRow = f.Row + 2 + 2 ' Base+2 is Target
+    
+    ' 2. Find Column
+    ' S7 Header is Process Name (Row 11 equivalent) -> headerRow + 1
+    Dim lastC As Long: lastC = ws7.Cells(headerRow + 1, ws7.Columns.count).End(xlToLeft).Column
+    Dim c As Long
+    Dim totalT As Double: totalT = 0
+    
+    For c = 2 To lastC
+        If Trim$(CStr(ws7.Cells(headerRow + 1, c).Value)) = prodName Then
+            totalT = totalT + val(ws7.Cells(targetRow, c).Value)
+        End If
+    Next c
+    GetTargetFromS7 = totalT
+End Function
+Private Sub PB_S8_Calc_Generic(ByVal section As String)
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim ws8 As Worksheet: Set ws8 = ThisWorkbook.Worksheets(S8)
+    Dim ws7 As Worksheet: Set ws7 = ThisWorkbook.Worksheets(S7)
+    Dim wsdTP As Worksheet: Set wsdTP = GetOrCreateSheet(SD_TP)
+    
+    Application.ScreenUpdating = False
+    
+    ' 1. Find Section in S8
+    Dim f As Range
+    Set f = ws8.Cells.Find(What:=section & " 狀態 (TP換線)", LookIn:=xlValues, LookAt:=xlPart)
+    If f Is Nothing Then MsgBox "無法在 S8 找到 " & section, vbExclamation: Exit Sub
+    
+    Dim baseRow As Long: baseRow = f.Row
+    Dim summaryRow As Long: summaryRow = baseRow + 2
+    Dim listHeaderRow As Long: listHeaderRow = baseRow + 5
+    Dim listStartRow As Long: listStartRow = listHeaderRow + 2
+    
+    ' 2. Determine List Range (Fix: Use specific Next Section Name)
+    Dim nextSectionName As String
+    Select Case section
+        Case "Before": nextSectionName = "Now"
+        Case "Now": nextSectionName = "Future"
+        Case "Future": nextSectionName = ""
+    End Select
+    
+    Dim nextSectionRow As Long
+    If nextSectionName <> "" Then
+        Dim fNext As Range
+        Set fNext = ws8.Cells.Find(What:=nextSectionName & " 狀態 (TP換線)", LookIn:=xlValues, LookAt:=xlPart)
+        If Not fNext Is Nothing Then
+            nextSectionRow = fNext.Row - 1
+        Else
+            nextSectionRow = 10000
+        End If
+    Else
+        nextSectionRow = ws8.UsedRange.Rows.count + 100
+        If nextSectionRow < listStartRow + 500 Then nextSectionRow = listStartRow + 500
+    End If
+    
+    ' Find last data row in LEFT list (Col A)
+    ' Look up from nextSectionRow
+    Dim lastRowList As Long
+    ' Ensure we look above the next section
+    If nextSectionRow > 1 Then
+        lastRowList = ws8.Cells(nextSectionRow, 1).End(xlUp).Row
+    Else
+        lastRowList = listStartRow
+    End If
+    
+    If lastRowList < listStartRow Then
+        MsgBox "請先匯入資料。", vbExclamation
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+    
+    ' Clear Right Side (Only within this section)
+    Dim clearEndRow As Long: clearEndRow = nextSectionRow - 2
+    If clearEndRow >= listStartRow Then
+        ws8.Range("L" & listStartRow & ":N" & clearEndRow).ClearContents
+        ws8.Range("L" & listStartRow & ":N" & clearEndRow).Borders.LineStyle = xlNone
+        ws8.Range("L" & listStartRow & ":N" & clearEndRow).Interior.ColorIndex = xlNone
+    End If
+    
+    ' Summary Vars
+    Dim sumCurPOL As Double: sumCurPOL = 0
+    Dim sumCurBMU As Double: sumCurBMU = 0
+    Dim sumFutPOL As Double: sumFutPOL = 0
+    Dim sumFutBMU As Double: sumFutBMU = 0
+    
+    ' 3. Loop List
+    Dim r As Long
+    For r = listStartRow To lastRowList
+        Dim mName As String: mName = Trim$(CStr(ws8.Cells(r, 1).Value))
+        Dim curProd As String: curProd = Trim$(CStr(ws8.Cells(r, 2).Value))
+        Dim decision As String: decision = Trim$(CStr(ws8.Cells(r, 4).Value))
+        
+        ' Lookup in SD_TP
+        Dim capPOL As Double: capPOL = 0
+        Dim capBMU As Double: capBMU = 0
+        
+        ' Optimization: Use a Dictionary for SD_TP lookups if slow, but loop is okay for <100 items
+        Dim rTP As Long, lastRTP As Long
+        lastRTP = wsdTP.Cells(wsdTP.Rows.count, 1).End(xlUp).Row
+        Dim found As Boolean: found = False
+        
+        For rTP = 2 To lastRTP
+            If wsdTP.Cells(rTP, 1).Value = mName And wsdTP.Cells(rTP, 6).Value = section Then
+                capPOL = val(wsdTP.Cells(rTP, 2).Value)
+                capBMU = val(wsdTP.Cells(rTP, 3).Value)
+                found = True
+                Exit For
+            End If
+        Next rTP
+        
+        ' Current Sum
+        If InStr(1, curProd, "uPOL", vbTextCompare) > 0 Then
+            sumCurPOL = sumCurPOL + capPOL
+        ElseIf InStr(1, curProd, "uBMU", vbTextCompare) > 0 Then
+            sumCurBMU = sumCurBMU + capBMU
+        End If
+        
+        ' Future
+        Dim futProd As String
+        Dim futCap As Double
+        
+        If decision = "換線" Then
+            If InStr(1, curProd, "uPOL", vbTextCompare) > 0 Then
+                futProd = "uBMU"
+                futCap = capBMU
+            ElseIf InStr(1, curProd, "uBMU", vbTextCompare) > 0 Then
+                futProd = "uPOL"
+                futCap = capPOL
+            Else
+                futProd = curProd
+                futCap = 0
+            End If
+        Else
+            futProd = curProd
+            If InStr(1, curProd, "uPOL", vbTextCompare) > 0 Then
+                futCap = capPOL
+            ElseIf InStr(1, curProd, "uBMU", vbTextCompare) > 0 Then
+                futCap = capBMU
+            Else
+                futCap = 0
+            End If
+        End If
+        
+        ' Future Sum
+        If InStr(1, futProd, "uPOL", vbTextCompare) > 0 Then
+            sumFutPOL = sumFutPOL + futCap
+        ElseIf InStr(1, futProd, "uBMU", vbTextCompare) > 0 Then
+            sumFutBMU = sumFutBMU + futCap
+        End If
+        
+        ' Write
+        ws8.Cells(r, 12).Value = mName
+        ws8.Cells(r, 13).Value = futProd
+        ws8.Cells(r, 14).Value = futCap
+        
+        If futProd <> curProd Then
+            ws8.Range(ws8.Cells(r, 12), ws8.Cells(r, 14)).Interior.Color = RGB(255, 240, 200)
+        Else
+            ws8.Range(ws8.Cells(r, 12), ws8.Cells(r, 14)).Interior.ColorIndex = xlNone
+        End If
+    Next r
+    
+    ApplyBorder ws8.Range("L" & listStartRow - 1 & ":N" & lastRowList)
+    ws8.Range("N" & listStartRow & ":N" & lastRowList).NumberFormat = "#,##0"
+    
+    ' 4. Update Summary
+    Dim tPOL As Double: tPOL = GetTargetFromS7(ws7, section, "uPOL-TP")
+    Dim tBMU As Double: tBMU = GetTargetFromS7(ws7, section, "uBMU-TP")
+    Dim mPOL As Double: mPOL = val(ws8.Cells(3, 2).Value)
+    Dim mBMU As Double: mBMU = val(ws8.Cells(3, 3).Value)
+    Dim gPOL As Double: gPOL = tPOL * mPOL
+    Dim gBMU As Double: gBMU = tBMU * mBMU
+    
+    ws8.Cells(summaryRow, 4).Value = "換線後總產能"
+    ws8.Cells(summaryRow, 5).Value = "最終達成率"
+    
+    Dim rS As Long: rS = summaryRow + 1
+    ws8.Cells(rS, 2).Value = gPOL
+    ws8.Cells(rS, 3).Value = sumCurPOL
+    ws8.Cells(rS, 4).Value = sumFutPOL
+    ws8.Cells(rS, 5).Formula = "=IFERROR(D" & rS & "/B" & rS & ",0)"
+    
+    rS = rS + 1
+    ws8.Cells(rS, 2).Value = gBMU
+    ws8.Cells(rS, 3).Value = sumCurBMU
+    ws8.Cells(rS, 4).Value = sumFutBMU
+    ws8.Cells(rS, 5).Formula = "=IFERROR(D" & rS & "/B" & rS & ",0)"
+    
+    Application.ScreenUpdating = True
+    MsgBox "計算完成 (" & section & ")。", vbInformation
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "計算錯誤: " & Err.Description, vbExclamation
+End Sub
+
+Public Sub PB_SaveSheet8AsXLSX(): SaveOneSheetAsXLSX S8: End Sub
+Public Sub PB_GenerateSheet9()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim ws8 As Worksheet: Set ws8 = ThisWorkbook.Worksheets(S8)
+    Dim ws9 As Worksheet: Set ws9 = ThisWorkbook.Worksheets(S9)
+    
+    Application.ScreenUpdating = False
+    PB_ClearSheet ws9
+    
+    ' Check S8
+    If ws8.Cells(1, 1).Value = "" Then
+        MsgBox "第8頁無資料，無法生成第9頁。", vbExclamation
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+    
+    ws9.Range("A1").Value = "產能平衡圖 - 第9頁 (日圖表 - Before/Now/Future)"
+    ws9.Range("A1:H1").Merge
+    ws9.Range("A1").Font.Bold = True
+    ws9.Range("A1").Font.Size = 16
+    ws9.Rows(1).RowHeight = 26
+    
+    ' Buttons
+    Dim anchor As Range: Set anchor = ws9.Range("D2")
+    AddFormButton ws9, BTN_S9_CHART, "產生圖表(全部)", "PB_S9_CreateCharts", anchor.Left, anchor.Top, 220, 26
+    AddFormButton ws9, "btnPB_S9_Save", "另存新檔 (.xlsx)", "PB_SaveSheet9AsXLSX", anchor.Left, anchor.Top + 32, 220, 26
+    
+    ws9.Cells(2, 1).Value = "資料來源："
+    ws9.Cells(2, 2).Value = "S8 (Before/Now/Future)"
+    
+    Application.ScreenUpdating = True
+    MsgBox "第9頁已初始化。請點選「產生圖表」。", vbInformation
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "生成第9頁發生錯誤:" & vbCrLf & Err.Description, vbExclamation
+End Sub
+
+Public Sub PB_S9_CreateCharts()
+    On Error GoTo EH
+    EnsureBaseSheets
+    
+    Dim ws9 As Worksheet: Set ws9 = ThisWorkbook.Worksheets(S9)
+    Application.ScreenUpdating = False
+    
+    ' Clear Old Charts
+    DeleteAllCharts ws9
+    
+    ' Reset Top Position
+    Dim curTop As Double: curTop = 50
+    
+    ' Generate Charts for each section
+    curTop = GenerateChartsForSection(ws9, "Before", curTop)
+    curTop = GenerateChartsForSection(ws9, "Now", curTop)
+    curTop = GenerateChartsForSection(ws9, "Future", curTop)
+    
+    Application.ScreenUpdating = True
+    MsgBox "圖表已生成 (B/N/F)。", vbInformation
+    Exit Sub
+EH:
+    Application.ScreenUpdating = True
+    MsgBox "產生圖表錯誤:" & vbCrLf & Err.Description, vbExclamation
+End Sub
+
+Private Function GenerateChartsForSection(ByVal ws9 As Worksheet, ByVal sectionName As String, ByVal topPos As Double) As Double
+    Dim ws0 As Worksheet: Set ws0 = ThisWorkbook.Worksheets(S0)
+    Dim ws8 As Worksheet: Set ws8 = ThisWorkbook.Worksheets(S8)
+    Dim ws7 As Worksheet: Set ws7 = ThisWorkbook.Worksheets(S7)
+    
+    Dim dataDays As Double: dataDays = val(ws7.Range("B2").Value)
+    If dataDays <= 0 Then dataDays = 1
+    
+    Dim factorPOL As Double: factorPOL = val(ws8.Range("B3").Value)
+    Dim factorBMU As Double: factorBMU = val(ws8.Range("C3").Value)
+    If factorPOL <= 0 Then factorPOL = 1
+    If factorBMU <= 0 Then factorBMU = 1
+    
+    ' Finder Logic
+    Dim f8 As Range
+    Set f8 = ws8.Cells.Find(What:=sectionName & " 狀態 (TP換線)", LookIn:=xlValues, LookAt:=xlPart)
+    If f8 Is Nothing Then GenerateChartsForSection = topPos: Exit Function
+    
+    Dim s8Start As Long: s8Start = f8.Row + 7
+    Dim s8End As Long
+    Dim nextSec As String
+    Select Case sectionName
+        Case "Before": nextSec = "Now"
+        Case "Now": nextSec = "Future"
+        Case "Future": nextSec = ""
+    End Select
+    If nextSec <> "" Then
+        Dim fNext As Range: Set fNext = ws8.Cells.Find(What:=nextSec & " 狀態 (TP換線)", LookIn:=xlValues, LookAt:=xlPart)
+        If Not fNext Is Nothing Then s8End = fNext.Row - 1 Else s8End = 10000
+    Else
+        s8End = ws8.Cells(ws8.Rows.count, 1).End(xlUp).Row
+    End If
+    
+    Dim f7 As Range
+    Set f7 = ws7.Cells.Find(What:=sectionName & " 狀態", LookIn:=xlValues, LookAt:=xlPart)
+    If f7 Is Nothing Then GenerateChartsForSection = topPos: Exit Function
+    
+    Dim s7HeaderRow As Long: s7HeaderRow = f7.Row + 2
+    Dim lastCol7 As Long: lastCol7 = ws7.Cells(s7HeaderRow + 1, ws7.Columns.count).End(xlToLeft).Column
+    
+    ' Grouping
+    Dim dictGroups As Object: Set dictGroups = CreateObject("Scripting.Dictionary")
+    Dim dictProc2Group As Object: Set dictProc2Group = CreateObject("Scripting.Dictionary")
+    Dim r0 As Long, lastR0 As Long: lastR0 = ws0.Cells(ws0.Rows.count, 1).End(xlUp).Row
+    For r0 = 4 To lastR0
+        Dim gName As String: gName = Trim$(CStr(ws0.Cells(r0, 1).Value))
+        Dim pName As String: pName = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        If gName <> "" And pName <> "" Then
+            If Not dictGroups.exists(gName) Then dictGroups.Add gName, New Collection
+            On Error Resume Next
+            dictGroups(gName).Add pName, pName
+            If Not dictProc2Group.exists(pName) Then dictProc2Group.Add pName, gName
+            On Error GoTo 0
+        End If
+    Next r0
+    
+    ' S7 Data
+    Dim dictS7Data As Object: Set dictS7Data = CreateObject("Scripting.Dictionary")
+    Dim c7 As Long
+    For c7 = 2 To lastCol7
+        Dim pN As String: pN = Trim$(CStr(ws7.Cells(s7HeaderRow + 1, c7).Value))
+        Dim arr(0 To 3) As Double
+        arr(0) = val(ws7.Cells(s7HeaderRow + 2, c7).Value)
+        arr(1) = val(ws7.Cells(s7HeaderRow + 3, c7).Value)
+        arr(2) = val(ws7.Cells(s7HeaderRow + 4, c7).Value)
+        arr(3) = val(ws7.Cells(s7HeaderRow + 5, c7).Value)
+        If dictS7Data.exists(pN) Then
+            Dim existArr As Variant: existArr = dictS7Data(pN)
+            existArr(0) = existArr(0) + arr(0)
+            existArr(1) = existArr(1) + arr(1)
+            dictS7Data(pN) = existArr
+        Else
+            dictS7Data.Add pN, arr
+        End If
+    Next c7
+    
+    ' S8 Logic
+    Dim dictEquip As Object: Set dictEquip = CreateObject("Scripting.Dictionary")
+    Dim c0 As Long
+    For r0 = 4 To lastR0
+        Dim pName0 As String: pName0 = Trim$(CStr(ws0.Cells(r0, 2).Value))
+        Dim lastC0 As Long: lastC0 = ws0.Cells(r0, ws0.Columns.count).End(xlToLeft).Column
+        For c0 = 3 To lastC0
+            Dim mID As String: mID = UCase(Trim$(CStr(ws0.Cells(r0, c0).Value)))
+            If mID <> "" And Not dictEquip.exists(mID) Then dictEquip.Add mID, pName0
+        Next c0
+    Next r0
+    
+    Dim dictTPChart As Object: Set dictTPChart = CreateObject("Scripting.Dictionary")
+    Dim r8 As Long
+    For r8 = s8Start To s8End
+        Dim mName8 As String: mName8 = Trim$(CStr(ws8.Cells(r8, 1).Value))
+        If mName8 = "" Then Exit For
+        Dim pName8 As String: pName8 = ""
+        If dictEquip.exists(UCase(mName8)) Then pName8 = dictEquip(UCase(mName8))
+        
+        If pName8 <> "" Then
+            Dim curP As String: curP = Trim$(CStr(ws8.Cells(r8, 2).Value))
+            Dim futP As String: futP = Trim$(CStr(ws8.Cells(r8, 13).Value))
+            Dim futCap As Double: futCap = val(ws8.Cells(r8, 14).Value)
+            Dim curCap As Double: curCap = val(ws8.Cells(r8, 3).Value)
+            
+            Dim dtR As Double: dtR = 0
+            Dim spdR As Double: spdR = 1
+            If dictS7Data.exists(pName8) Then
+                Dim s7Arr As Variant: s7Arr = dictS7Data(pName8)
+                dtR = s7Arr(2)
+                spdR = s7Arr(3)
+            End If
+            
+            Dim chartArr(0 To 4) As Double
+            If dictTPChart.exists(pName8) Then
+                Dim tmp As Variant: tmp = dictTPChart(pName8)
+                chartArr(0) = tmp(0): chartArr(1) = tmp(1): chartArr(2) = tmp(2)
+                chartArr(3) = tmp(3): chartArr(4) = tmp(4)
+            End If
+            
+            Dim simpleP As String: simpleP = Split(pName8, "-")(0)
+            Dim curMatch As Boolean: curMatch = (InStr(1, curP, simpleP, vbTextCompare) > 0)
+            Dim futMatch As Boolean: futMatch = (InStr(1, futP, simpleP, vbTextCompare) > 0)
+            
+            Dim capToUse As Double: capToUse = 0
+            Dim factor As Double: factor = 1
+            If curMatch Then
+                capToUse = curCap
+                If InStr(1, curP, "uPOL", vbTextCompare) > 0 Then factor = factorPOL Else factor = factorBMU
+            Else
+                capToUse = futCap
+                If InStr(1, futP, "uPOL", vbTextCompare) > 0 Then factor = factorPOL Else factor = factorBMU
+            End If
+            
+            capToUse = (capToUse / factor) * dataDays
+            
+            If curMatch And futMatch Then
+                Dim rmn As Double: rmn = capToUse * (1 - dtR)
+                chartArr(0) = chartArr(0) + rmn * spdR
+                chartArr(1) = chartArr(1) + rmn * (1 - spdR)
+                chartArr(2) = chartArr(2) + capToUse * dtR
+            ElseIf curMatch And Not futMatch Then
+                chartArr(4) = chartArr(4) + capToUse
+            ElseIf Not curMatch And futMatch Then
+                chartArr(3) = chartArr(3) + capToUse
+            End If
+            
+            If dictTPChart.exists(pName8) Then dictTPChart(pName8) = chartArr Else dictTPChart.Add pName8, chartArr
+        End If
+    Next r8
+    
+    ws9.Cells(Int(topPos / 20) + 1, 1).Value = "--- " & sectionName & " ---"
+    ws9.Cells(Int(topPos / 20) + 1, 1).Font.Bold = True
+    topPos = topPos + 30
+    
+    Dim grpKey As Variant
+    For Each grpKey In dictGroups.keys
+        Dim yMaxVal As Double: yMaxVal = 0
+        If InStr(1, grpKey, "共用", vbTextCompare) > 0 Or InStr(1, grpKey, "Shared", vbTextCompare) > 0 Then
+            yMaxVal = dataDays * 1000
+        End If
+        
+        Dim procColl As Collection: Set procColl = dictGroups(grpKey)
+        Dim distinctProcs As Object: Set distinctProcs = CreateObject("Scripting.Dictionary")
+        Dim item As Variant
+        For Each item In procColl
+            If Not distinctProcs.exists(item) Then distinctProcs.Add item, 0
+        Next item
+        
+        If distinctProcs.count > 0 Then
+            Dim arrX() As String: ReDim arrX(1 To distinctProcs.count)
+            Dim arrG() As Double: ReDim arrG(1 To distinctProcs.count)
+            Dim arrY() As Double: ReDim arrY(1 To distinctProcs.count)
+            Dim arrR() As Double: ReDim arrR(1 To distinctProcs.count)
+            Dim arrB() As Double: ReDim arrB(1 To distinctProcs.count)
+            Dim arrD() As Double: ReDim arrD(1 To distinctProcs.count)
+            Dim arrL() As Double: ReDim arrL(1 To distinctProcs.count)
+            
+            Dim idx As Long: idx = 1
+            Dim pk As Variant
+            For Each pk In distinctProcs.keys
+                Dim pN2 As String: pN2 = CStr(pk)
+                arrX(idx) = pN2
+                
+                If dictTPChart.exists(pN2) Then
+                    Dim tpArr As Variant: tpArr = dictTPChart(pN2)
+                    arrG(idx) = tpArr(0)
+                    arrY(idx) = tpArr(1)
+                    arrR(idx) = tpArr(2)
+                    arrB(idx) = tpArr(3)
+                    arrD(idx) = tpArr(4)
+                ElseIf dictS7Data.exists(pN2) Then
+                    Dim s7D As Variant: s7D = dictS7Data(pN2)
+                    Dim cap7 As Double: cap7 = s7D(1) * dataDays
+                    Dim dt7 As Double: dt7 = s7D(2)
+                    Dim spd7 As Double: spd7 = s7D(3)
+                    Dim rm7 As Double: rm7 = cap7 * (1 - dt7)
+                    arrG(idx) = rm7 * spd7
+                    arrY(idx) = rm7 * (1 - spd7)
+                    arrR(idx) = cap7 * dt7
+                End If
+                
+                If dictS7Data.exists(pN2) Then
+                    arrL(idx) = dictS7Data(pN2)(0) * dataDays
+                End If
+                
+                arrG(idx) = Application.WorksheetFunction.Round(arrG(idx), 0)
+                arrY(idx) = Application.WorksheetFunction.Round(arrY(idx), 0)
+                arrR(idx) = Application.WorksheetFunction.Round(arrR(idx), 0)
+                arrB(idx) = Application.WorksheetFunction.Round(arrB(idx), 0)
+                arrD(idx) = Application.WorksheetFunction.Round(arrD(idx), 0)
+                arrL(idx) = Application.WorksheetFunction.Round(arrL(idx), 0)
+                
+                idx = idx + 1
+            Next pk
+            
+            ' Changed Call to DrawS9GroupChart
+            DrawS9GroupChart ws9, sectionName & " - " & grpKey, 50, topPos, _
+                             arrX, arrG, arrY, arrR, arrB, arrD, arrL, yMaxVal
+                             
+            topPos = topPos + 450
+        End If
+    Next grpKey
+    
+    GenerateChartsForSection = topPos
+End Function
+Private Sub DrawS9GroupChart(ByVal ws As Worksheet, ByVal title As String, ByVal leftPos As Double, ByVal topPos As Double, _
+                             ByVal arrX As Variant, ByVal arrGray As Variant, ByVal arrYel As Variant, _
+                             ByVal arrRed As Variant, ByVal arrBlue As Variant, ByVal arrDotted As Variant, _
+                             ByVal arrLine As Variant, ByVal yMax As Double)
+    
+    Dim chObj As ChartObject
+    Set chObj = ws.ChartObjects.Add(Left:=leftPos, Top:=topPos, width:=600, height:=400)
+    
+    With chObj.Chart
+        .ChartType = xlColumnStacked
+        .HasTitle = True
+        .ChartTitle.Text = title
+        .HasLegend = True
+        
+        Do While .SeriesCollection.count > 0
+            .SeriesCollection(1).Delete
+        Loop
+        
+        ' 1. Effective (Gray)
+        With .SeriesCollection.NewSeries
+            .name = "有效產能"
+            .XValues = arrX
+            .Values = arrGray
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(192, 192, 192)
+            .HasDataLabels = True
+        End With
+        
+        ' 2. Speed Loss (Yellow)
+        With .SeriesCollection.NewSeries
+            .name = "產速損失"
+            .Values = arrYel
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(255, 255, 0)
+            .HasDataLabels = True
+        End With
+        
+        ' 3. DT Loss (Red)
+        With .SeriesCollection.NewSeries
+            .name = "機故損失"
+            .Values = arrRed
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(255, 0, 0)
+            .HasDataLabels = True
+        End With
+        
+        ' 4. Added (Blue)
+        With .SeriesCollection.NewSeries
+            .name = "換線增加"
+            .Values = arrBlue
+            .ChartType = xlColumnStacked
+            .Format.Fill.ForeColor.RGB = RGB(0, 112, 192)
+            .HasDataLabels = True
+        End With
+        
+        ' 5. Lost (Dotted)
+        With .SeriesCollection.NewSeries
+            .name = "換線減少"
+            .Values = arrDotted
+            .ChartType = xlColumnStacked
+            .Format.Fill.Solid
+            .Format.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .HasDataLabels = True
+            With .Format.Line
+                .Visible = msoTrue
+                .ForeColor.RGB = RGB(0, 0, 0)
+                .DashStyle = msoLineDash
+                .Weight = 2.25
+            End With
+        End With
+        
+        ' 6. Target (Line)
+        With .SeriesCollection.NewSeries
+            .name = "目標產能"
+            .Values = arrLine
+            .ChartType = xlLine
+            .Format.Line.ForeColor.RGB = RGB(0, 0, 255)
+            .Format.Line.DashStyle = msoLineDash
+            .Format.Line.Weight = 2
+            .MarkerStyle = xlMarkerStyleNone
+        End With
+        
+        ' Y-Axis Max
+        If yMax > 0 Then
+            .Axes(xlValue).MinimumScale = 0
+            .Axes(xlValue).MaximumScale = yMax
+        End If
+        
+        ' v4.17.6: Transparency
+        .Axes(xlValue).MajorGridlines.Format.Line.Transparency = 1
+        
+        ' v4.17.8: Label Position InsideBase if > yMax
+        If yMax > 0 Then
+            Dim serEff As Series
+            Set serEff = .SeriesCollection(1)
+            Dim ptIdx As Long
+            Dim valIdx As Long
+            For ptIdx = 1 To serEff.Points.count
+                valIdx = LBound(arrGray) + ptIdx - 1
+                If arrGray(valIdx) > yMax Then
+                    serEff.Points(ptIdx).DataLabel.Position = xlLabelPositionInsideBase
+                End If
+            Next ptIdx
+        End If
+        
+    End With
+End Sub
+
+Public Sub PB_SaveSheet9AsXLSX(): SaveOneSheetAsXLSX S9: End Sub
+Private Function DetectProductCountFromSheet2(ByVal ws2 As Worksheet) As Long
+    Dim topRow As Long: topRow = ws2.Range(S2_TABLE2_TOP).Row
+    Dim c As Long
+    For c = 2 To 40
+        If Trim$(CStr(ws2.Cells(topRow, c).Value)) = "需求計算" Then
+            DetectProductCountFromSheet2 = (c - 2) \ 4
+            If DetectProductCountFromSheet2 < 1 Then DetectProductCountFromSheet2 = 1
+            If DetectProductCountFromSheet2 > 3 Then DetectProductCountFromSheet2 = 3
+            Exit Function
+        End If
+    Next c
+    DetectProductCountFromSheet2 = 2
+End Function
+
+Private Sub BuildSheet2TopDemandTable(ByVal ws2 As Worksheet, ByVal ws1 As Worksheet, ByVal productCount As Long, ByRef prodNames() As String)
+    Dim topLeft As Range: Set topLeft = ws2.Range(S2_TOP_TABLE) ' A3
+
+    ws2.Cells(topLeft.Row, topLeft.Column).Value = "項目"
+    Dim p As Long
+    For p = 1 To productCount
+        ws2.Cells(topLeft.Row, topLeft.Column + p).Value = prodNames(p)
+    Next p
+
+    Dim lastCol As Long: lastCol = topLeft.Column + productCount
+    With ws2.Range(ws2.Cells(topLeft.Row, topLeft.Column), ws2.Cells(topLeft.Row, lastCol))
+        .Font.Bold = True
+        .Interior.Color = RGB(230, 230, 230)
+        .HorizontalAlignment = xlCenter
+    End With
+
+    ' [Update] Inserted "良率" at Index 3 (Row 7)
+    Dim labels As Variant
+    labels = Array( _
+        "產能需求(顆數)", _
+        "一片幾顆", _
+        "工單片數", _
+        "良率", _
+        "每日生產時數", _
+        "每月生產日數", _
+        "總片數(每月)", _
+        "筆數(每日)" _
+    )
+
+    Dim i As Long
+    For i = 0 To UBound(labels)
+        ws2.Cells(topLeft.Row + 1 + i, topLeft.Column).Value = labels(i)
+        ws2.Cells(topLeft.Row + 1 + i, topLeft.Column).Font.Bold = (i <= 5)
+        ws2.Cells(topLeft.Row + 1 + i, topLeft.Column).Interior.Color = HexToLong(CLR_A_SHARED)
+    Next i
+
+    Dim s1Top As Range: Set s1Top = ws1.Range(S1_TABLE_TOP)
+    For p = 1 To productCount
+        Dim c As Long: c = topLeft.Column + p
+        ' S1 Mappings (Offsets shifted due to Yield insertion)
+        ' Row 4 (Need) <- S1 Row 7
+        ws2.Cells(topLeft.Row + 1, c).Value = ws1.Cells(s1Top.Row + 1, s1Top.Column + p).Value
+        ' Row 5 (Pcs/Sht) <- S1 Row 8
+        ws2.Cells(topLeft.Row + 2, c).Value = ws1.Cells(s1Top.Row + 2, s1Top.Column + p).Value
+        ' Row 6 (LotSize) <- S1 Row 9
+        ws2.Cells(topLeft.Row + 3, c).Value = ws1.Cells(s1Top.Row + 3, s1Top.Column + p).Value
+        
+        ' Row 7 (Yield) <- Default 100%
+        ws2.Cells(topLeft.Row + 4, c).Value = 1
+        
+        ' Row 8 (Hours) <- S1 Row 10
+        ws2.Cells(topLeft.Row + 5, c).Value = ws1.Cells(s1Top.Row + 4, s1Top.Column + p).Value
+        ' Row 9 (Days) <- S1 Row 11
+        ws2.Cells(topLeft.Row + 6, c).Value = ws1.Cells(s1Top.Row + 5, s1Top.Column + p).Value
+    Next p
+
+    For p = 1 To productCount
+        Dim col As Long: col = topLeft.Column + p
+        Dim addrNeed As String: addrNeed = ws2.Cells(topLeft.Row + 1, col).Address(False, False)
+        Dim addrPcs As String: addrPcs = ws2.Cells(topLeft.Row + 2, col).Address(False, False)
+        Dim addrLot As String: addrLot = ws2.Cells(topLeft.Row + 3, col).Address(False, False)
+        Dim addrYield As String: addrYield = ws2.Cells(topLeft.Row + 4, col).Address(False, False)
+        Dim addrHours As String: addrHours = ws2.Cells(topLeft.Row + 5, col).Address(False, False)
+        Dim addrDays As String: addrDays = ws2.Cells(topLeft.Row + 6, col).Address(False, False)
+        Dim addrTotal As String: addrTotal = ws2.Cells(topLeft.Row + 7, col).Address(False, False)
+
+        ' Row 10 (Total Pieces): (Need / PcsSht) / Yield
+        ws2.Cells(topLeft.Row + 7, col).Formula = "=IFERROR(CEILING((" & addrNeed & "/" & addrPcs & ")/" & addrYield & ",1),0)"
+        
+        ' Row 11 (Daily Lots): (TotalPieces / Days) / LotSize
+        ' Note: TotalPieces is already Yield-adjusted.
+        ws2.Cells(topLeft.Row + 8, col).Formula = "=IFERROR(CEILING((" & addrTotal & "/" & addrDays & ")/" & addrLot & ",1),0)"
+    Next p
+
+    ws2.Range(ws2.Cells(topLeft.Row + 1, topLeft.Column + 1), ws2.Cells(topLeft.Row + 8, lastCol)).NumberFormat = "#,##0"
+    ' Fix Yield Format
+    ws2.Range(ws2.Cells(topLeft.Row + 4, topLeft.Column + 1), ws2.Cells(topLeft.Row + 4, lastCol)).NumberFormat = "0%"
+    
+    ApplyBorder ws2.Range(ws2.Cells(topLeft.Row, topLeft.Column), ws2.Cells(topLeft.Row + 8, lastCol))
+End Sub
+
+Private Sub SaveOneSheetAsXLSX(ByVal sheetName As String)
+    On Error GoTo EH
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets(sheetName)
+
+    Dim savePath As Variant
+    savePath = Application.GetSaveAsFilename( _
+        InitialFileName:="產能平衡圖_" & sheetName & "_" & Format$(Now, "yyyymmdd_hhnn") & ".xlsx", _
+        fileFilter:="Excel Workbook (*.xlsx), *.xlsx")
+
+    If savePath = False Then Exit Sub
+
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    ws.Copy
+    Dim newWb As Workbook: Set newWb = ActiveWorkbook
+    Dim newWs As Worksheet: Set newWs = newWb.Worksheets(1)
+
+    ' Fix: Delete buttons safely by iterating backwards through Shapes
+    Dim i As Long
+    For i = newWs.Shapes.count To 1 Step -1
+        ' Type 8 is msoFormControl (Buttons), Type 12 is msoOLEControlObject (ActiveX)
+        ' Also check OnAction to be sure
+        If newWs.Shapes(i).Type = 8 Or newWs.Shapes(i).OnAction <> "" Then
+            newWs.Shapes(i).Delete
+        End If
+    Next i
+
+    newWb.SaveAs Filename:=CStr(savePath), FileFormat:=xlOpenXMLWorkbook
+    newWb.Close SaveChanges:=False
+
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+
+    MsgBox "已另存新檔：" & vbCrLf & CStr(savePath), vbInformation
+    Exit Sub
+
+EH:
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+    MsgBox "另存新檔失敗：" & vbCrLf & "Err " & Err.Number & " - " & Err.Description, vbExclamation
+End Sub
+
+Private Sub ApplyUtilOver100Format(ByVal rng As Range)
+    On Error Resume Next
+    rng.FormatConditions.Delete
+    On Error GoTo 0
+
+    Dim fc As FormatCondition
+    Set fc = rng.FormatConditions.Add(Type:=xlCellValue, Operator:=xlGreater, Formula1:="1")
+    fc.Interior.Color = HexToLong(CLR_OVER_BG_HEX)
+    fc.Font.Color = HexToLong(CLR_OVER_FG_HEX)
+    fc.Font.Bold = True
+End Sub
+
+Private Sub ApplyHeaderColors2(ByVal ws As Worksheet, ByVal topRow As Long, ByVal topCol As Long, ByVal productCount As Long)
+    Dim r1 As Long: r1 = topRow
+    Dim r2 As Long: r2 = topRow + 1
+
+    Dim curCol As Long: curCol = topCol + 1
+    Dim p As Long
+    For p = 1 To productCount
+        Dim clr As Long
+        Select Case p
+            Case 1: clr = HexToLong(CLR_P1)
+            Case 2: clr = HexToLong(CLR_P2)
+            Case 3: clr = HexToLong(CLR_P3)
+        End Select
+        ws.Range(ws.Cells(r1, curCol), ws.Cells(r1, curCol + 3)).Interior.Color = clr
+        ws.Range(ws.Cells(r2, curCol), ws.Cells(r2, curCol + 3)).Interior.Color = clr
+        curCol = curCol + 4
+    Next p
+
+    ws.Range(ws.Cells(r1, curCol), ws.Cells(r1, curCol + 3)).Interior.Color = HexToLong(CLR_DEMAND)
+    ws.Range(ws.Cells(r2, curCol), ws.Cells(r2, curCol + 3)).Interior.Color = HexToLong(CLR_DEMAND)
+    curCol = curCol + 4
+
+    ws.Range(ws.Cells(r1, curCol), ws.Cells(r1, curCol + 3)).Interior.Color = HexToLong(CLR_UTIL)
+    ws.Range(ws.Cells(r2, curCol), ws.Cells(r2, curCol + 3)).Interior.Color = HexToLong(CLR_UTIL)
+End Sub
+Private Function BuildAvgCTFormula(ByVal ws As Worksheet, ByVal r As Long, ByVal topCol As Long, ByVal productCount As Long) As String
+    Dim num As String, den As String
+    num = ""
+    den = ""
+
+    Dim p As Long, base As Long
+    For p = 1 To productCount
+        base = topCol + 1 + (p - 1) * 4
+
+        Dim ctA As String, lotA As String, dayA As String, passA As String
+        ctA = ws.Cells(r, base + 0).Address(False, False)
+        lotA = ws.Cells(r, base + 1).Address(False, False)
+        dayA = ws.Cells(r, base + 2).Address(False, False)
+        passA = ws.Cells(r, base + 3).Address(False, False)
+
+        Dim termNum As String, termDen As String
+        termNum = "IF(" & ctA & "="""",0," & ctA & "*" & lotA & "*" & dayA & "*" & passA & ")"
+        termDen = "IF(" & ctA & "="""",0," & lotA & "*" & dayA & ")"
+
+        If num <> "" Then num = num & "+"
+        If den <> "" Then den = den & "+"
+
+        num = num & termNum
+        den = den & termDen
+    Next p
+
+    BuildAvgCTFormula = "=IFERROR((" & num & ")/(" & den & "),0)"
+End Function
+
+Private Function BuildTotalDayPiecesRowFormula(ByVal ws As Worksheet, ByVal r As Long, ByVal topCol As Long, ByVal productCount As Long) As String
+    Dim f As String: f = "="
+
+    Dim p As Long, base As Long
+    For p = 1 To productCount
+        base = topCol + 1 + (p - 1) * 4
+        Dim lotA As String, dayA As String
+        lotA = ws.Cells(r, base + 1).Address(False, False)
+        dayA = ws.Cells(r, base + 2).Address(False, False)
+
+        If p > 1 Then f = f & "+"
+        f = f & "IFERROR(" & lotA & "*" & dayA & ",0)"
+    Next p
+
+    BuildTotalDayPiecesRowFormula = f
+End Function
+
+Private Function CleanEquipBefore(ByVal v As Variant) As Variant
+    On Error GoTo SafeExit
+    Dim s As String
+    s = Trim$(CStr(v))
+    
+    ' Fix: Correctly handle empty check and exit
+    If s = "" Then
+        CleanEquipBefore = 0
+        Exit Function
+    End If
+
+    ' Fix: Correctly close the Replace string
+    s = Replace(s, ",", "")
+    
+    Do While Right$(s, 1) = "."
+        s = Trim$(Left$(s, Len(s) - 1))
+        If s = "" Then Exit Do
+    Loop
+
+    If s = "" Then
+        CleanEquipBefore = 0
+        Exit Function
+    End If
+
+    If IsNumeric(s) Then
+        Dim d As Double: d = CDbl(s)
+        If d > 2147483647# Then
+            CleanEquipBefore = d
+        Else
+            CleanEquipBefore = CLng(Application.WorksheetFunction.Round(d, 0))
+        End If
+    Else
+        CleanEquipBefore = v
+    End If
+    Exit Function
+
+SafeExit:
+    CleanEquipBefore = v
+End Function
+
+Private Sub PB_InitPBData(ByVal wsd As Worksheet)
+    wsd.Cells.Clear
+
+    wsd.Range("A1").Value = "IE_FilePath"
+    wsd.Range("A2").Value = "IE_ImportedAt"
+    wsd.Range("A3").Value = "ProductCount"
+    wsd.Range("A4").Value = "ProductNames"
+    wsd.Range("B1:B4").ClearContents
+
+    wsd.Range("A5").Value = "SharedStationCount"
+    wsd.Range("B5").ClearContents
+
+    wsd.Range("D1").Value = "Dedicated_ProductIndex"
+    wsd.Range("E1").Value = "Dedicated_EquipCount"
+    wsd.Range("D2:E200").ClearContents
+
+    wsd.Range("A6").Value = "Group"
+    wsd.Range("B6").Value = "MachineName"
+    wsd.Range("C6").Value = "P1_CT"
+    wsd.Range("D6").Value = "P1_LotQty"
+    wsd.Range("E6").Value = "P1_Passes"
+    wsd.Range("F6").Value = "P2_CT"
+    wsd.Range("G6").Value = "P2_LotQty"
+    wsd.Range("H6").Value = "P2_Passes"
+    wsd.Range("I6").Value = "P3_CT"
+    wsd.Range("J6").Value = "P3_LotQty"
+    wsd.Range("K6").Value = "P3_Passes"
+    wsd.Range("L6").Value = "EquipQty_Before"
+    wsd.Range("M6").Value = "SourceRow"
+
+    wsd.Range("A6:M6").Font.Bold = True
+End Sub
+
+Private Sub PB_ClearSheet(ByVal ws As Worksheet)
+    ws.Cells.Clear
+    ws.Cells.Font.name = "Microsoft JhengHei"
+    ws.Cells.Font.Size = 11
+End Sub
+
+Private Sub EnsureBaseSheets()
+    Dim ws1 As Worksheet, ws2 As Worksheet, ws3 As Worksheet, ws4 As Worksheet, ws5 As Worksheet, ws6 As Worksheet, ws7 As Worksheet, wsd As Worksheet
+    Set ws1 = GetOrCreateSheet(S1)
+    Set ws2 = GetOrCreateSheet(S2)
+    Set ws3 = GetOrCreateSheet(S3)
+    Set ws4 = GetOrCreateSheet(S4)
+    Set ws5 = GetOrCreateSheet(S5)
+    Set ws6 = GetOrCreateSheet(S6)
+    Set ws7 = GetOrCreateSheet(S7)
+    
+    Set wsd = GetOrCreateSheet(SD)
+    MakeVeryHidden wsd
+End Sub
+
+Private Function ComputeSheetHash_Safe(ByVal ws As Worksheet) As String
+    Const MODV As Double = 1000000007#
+    Const MUL As Double = 131#
+
+    Dim rng As Range
+    On Error Resume Next
+    Set rng = ws.UsedRange
+    On Error GoTo 0
+    If rng Is Nothing Then
+        ComputeSheetHash_Safe = ""
+        Exit Function
+    End If
+
+    Dim maxR As Long, maxC As Long
+    maxR = rng.Rows.count
+    maxC = rng.Columns.count
+    If maxR > 500 Then maxR = 500
+    If maxC > 80 Then maxC = 80
+
+    Dim h As Double: h = 0#
+    Dim r As Long, c As Long
+    For r = 1 To maxR
+        For c = 1 To maxC
+            Dim v As String
+            v = CStr(rng.Cells(r, c).Formula)
+            h = h * MUL + Len(v) + AscSafe(v)
+            h = h - Int(h / MODV) * MODV
+        Next c
+    Next r
+
+    ComputeSheetHash_Safe = CStr(Fix(h))
+End Function
+
+Private Function AscSafe(ByVal s As String) As Long
+    If Len(s) = 0 Then AscSafe = 0 Else AscSafe = Asc(Left$(s, 1))
+End Function
+
+Private Sub SaveSheetHash(ByVal sheetName As String, ByVal hashValue As String)
+    Dim wsd As Worksheet: Set wsd = GetOrCreateSheet(SD)
+    MakeVeryHidden wsd
+
+    Dim keyCell As Range
+    Set keyCell = FindHashCell(wsd, sheetName, True)
+    keyCell.Offset(0, 1).Value = hashValue
+    keyCell.Offset(0, 2).Value = Format$(Now, "yyyy-mm-dd hh:nn:ss")
+End Sub
+
+Private Function GetSheetHash(ByVal sheetName As String) As String
+    Dim wsd As Worksheet: Set wsd = GetOrCreateSheet(SD)
+    MakeVeryHidden wsd
+
+    Dim keyCell As Range
+    Set keyCell = FindHashCell(wsd, sheetName, False)
+    If keyCell Is Nothing Then GetSheetHash = "" Else GetSheetHash = CStr(keyCell.Offset(0, 1).Value)
+End Function
+
+Private Function FindHashCell(ByVal wsd As Worksheet, ByVal sheetName As String, ByVal createIfMissing As Boolean) As Range
+    Dim baseRow As Long: baseRow = 200
+    If wsd.Cells(baseRow, 1).Value = "" Then
+        wsd.Cells(baseRow, 1).Value = "SheetHashKey"
+        wsd.Cells(baseRow, 2).Value = "Hash"
+        wsd.Cells(baseRow, 3).Value = "SavedAt"
+        wsd.Range(wsd.Cells(baseRow, 1), wsd.Cells(baseRow, 3)).Font.Bold = True
+    End If
+
+    Dim r As Long
+    For r = baseRow + 1 To baseRow + 50
+        If Trim$(CStr(wsd.Cells(r, 1).Value)) = sheetName Then
+            Set FindHashCell = wsd.Cells(r, 1)
+            Exit Function
+        End If
+        If Trim$(CStr(wsd.Cells(r, 1).Value)) = "" Then Exit For
+    Next r
+
+    If createIfMissing Then
+        wsd.Cells(r, 1).Value = sheetName
+        Set FindHashCell = wsd.Cells(r, 1)
+    Else
+        Set FindHashCell = Nothing
+    End If
+End Function
+
+Private Function GetAfterPipe(ByVal s As String) As String
+    Dim pos As Long
+    pos = InStr(1, s, "|", vbBinaryCompare)
+    If pos > 0 Then GetAfterPipe = Trim$(mID$(s, pos + 1)) Else GetAfterPipe = ""
+End Function
+
+Private Function FindProdIndexByName(ByRef prodNames() As String, ByVal productCount As Long, ByVal targetName As String) As Long
+    Dim i As Long
+    For i = 1 To productCount
+        If StrComp(Trim$(prodNames(i)), Trim$(targetName), vbTextCompare) = 0 Then
+            FindProdIndexByName = i
+            Exit Function
+        End If
+    Next i
+    FindProdIndexByName = 0
+End Function
+
+Private Function GetOrCreateSheet(ByVal name As String) As Worksheet
+    On Error Resume Next
+    Set GetOrCreateSheet = ThisWorkbook.Worksheets(name)
+    On Error GoTo 0
+    If GetOrCreateSheet Is Nothing Then
+        Set GetOrCreateSheet = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.count))
+        GetOrCreateSheet.name = name
+    End If
+End Function
+
+Private Sub MakeVeryHidden(ByVal ws As Worksheet)
+    ws.Visible = xlSheetVeryHidden
+End Sub
+
+Private Sub AddFormButton(ByVal ws As Worksheet, ByVal btnName As String, ByVal caption As String, _
+                          ByVal macroName As String, ByVal leftPos As Double, ByVal topPos As Double, _
+                          ByVal width As Double, ByVal height As Double)
+    Dim btn As Button
+    Set btn = ws.Buttons.Add(leftPos, topPos, width, height)
+    btn.name = btnName
+    btn.caption = caption
+    btn.OnAction = macroName
+    btn.Font.name = "Microsoft JhengHei"
+    btn.Font.Size = 10
+End Sub
+
+Private Sub DeleteButtonIfExists(ByVal ws As Worksheet, ByVal btnName As String)
+    On Error Resume Next
+    ws.Buttons(btnName).Delete
+    On Error GoTo 0
+End Sub
+
+Private Sub ApplyBorder(ByVal rng As Range)
+    With rng.Borders(xlEdgeLeft): .LineStyle = xlContinuous: .Weight = xlMedium: End With
+    With rng.Borders(xlEdgeTop): .LineStyle = xlContinuous: .Weight = xlMedium: End With
+    With rng.Borders(xlEdgeRight): .LineStyle = xlContinuous: .Weight = xlMedium: End With
+    With rng.Borders(xlEdgeBottom): .LineStyle = xlContinuous: .Weight = xlMedium: End With
+    With rng.Borders(xlInsideVertical): .LineStyle = xlContinuous: .Weight = xlThin: End With
+    With rng.Borders(xlInsideHorizontal): .LineStyle = xlContinuous: .Weight = xlThin: End With
+End Sub
+
+Private Function StripSuffix(ByVal s As String, ByVal suffix As String) As String
+    s = Trim$(s)
+    If Right$(s, Len(suffix)) = suffix Then StripSuffix = Left$(s, Len(s) - Len(suffix)) Else StripSuffix = s
+End Function
+
+Private Function JoinProdNames(ByVal productCount As Long, ByRef prodNames() As String) As String
+    Dim arr() As String
+    ReDim arr(1 To productCount)
+    Dim i As Long
+    For i = 1 To productCount
+        arr(i) = prodNames(i)
+    Next i
+    JoinProdNames = Join(arr, "|")
+End Function
+
+Private Sub ParseProdNames(ByVal s As String, ByRef prodNames() As String)
+    Dim i As Long
+    
+    ' Fix: Properly loop to initialize array
+    For i = 1 To 3
+        prodNames(i) = ""
+    Next i
+    
+    Dim parts() As String
+    parts = Split(CStr(s), "|")
+    For i = 0 To UBound(parts)
+        If i + 1 <= 3 Then prodNames(i + 1) = parts(i)
+    Next i
+    For i = 1 To 3
+        If Trim$(prodNames(i)) = "" Then prodNames(i) = "產品" & i
+    Next i
+End Sub
+
+Private Function HexToLong(ByVal hexColor As String) As Long
+    ' Fix: Added missing double quotes and fixed Mid$ function name
+    Dim s As String: s = Replace(hexColor, "#", "")
+    If Len(s) <> 6 Then HexToLong = RGB(0, 0, 0): Exit Function
+
+    Dim rr As Long, gg As Long, bb As Long
+    rr = CLng("&H" & mID$(s, 1, 2))
+    gg = CLng("&H" & mID$(s, 3, 2))
+    bb = CLng("&H" & mID$(s, 5, 2))
+    HexToLong = RGB(rr, gg, bb)
+End Function
+
+Private Function FindHeaderColInRow(ByVal ws As Worksheet, ByVal headerRow As Long, ByVal headerText As String) As Long
+    Dim lastC As Long: lastC = ws.Cells(headerRow, ws.Columns.count).End(xlToLeft).Column
+    Dim c As Long
+    For c = 1 To lastC
+        Dim v As String: v = Trim$(CStr(ws.Cells(headerRow, c).Value))
+        If v = headerText Then
+            FindHeaderColInRow = c
+            Exit Function
+        End If
+        If InStr(1, v, headerText, vbTextCompare) > 0 Then
+            FindHeaderColInRow = c
+            Exit Function
+        End If
+    Next c
+    FindHeaderColInRow = 0
+End Function
+
+

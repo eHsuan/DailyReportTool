@@ -1,0 +1,91 @@
+{
+  "Process": {
+    "ABF壓合": {
+      "Equipments": "LF0003"
+    },
+    "雷射": {
+      "Equipments": "DR0026,DR0009"
+    },
+    "CF4 Plasma": {
+      "Equipments": "DL0017,DS0003"
+    },
+    "酸洗": {
+      "Equipments": "CL0201,CL0022"
+    },
+    "粗化": {
+      "Equipments": "CL0200"
+    },
+    "著膜": {
+      "Equipments": "SP0002,SP0004"
+    },
+    "乾膜壓合": {
+      "Equipments": "LF0014"
+    },
+    "綠漆印刷": {
+      "Equipments": "PR0254,PR0518"
+    },
+    "曝光": {
+      "Equipments": "EX0028,EX0044"
+    },
+    "乾膜顯影": {
+      "Equipments": "DE0025"
+    },
+    "濕膜顯影": {
+      "Equipments": "DE0005"
+    },
+    "電鍍": {
+      "Equipments": "PL0084,PL0007"
+    },
+    "去膜": {
+      "Equipments": "ST0012"
+    },
+    "Cu蝕刻": {
+      "Equipments": "ET0023"
+    },
+    "NiCr蝕刻": {
+      "Equipments": "ET0026"
+    },
+    "AOI": {
+      "Equipments": "VC0680"
+    },
+    "SMT": {
+      "Equipments": "PR0008,PR0187,VC0164,OV0805,VC0497,SM0007,SM0015,AC1837,VC0498,VC1346,VC1347,VC1348,OV1241"
+    },
+    "Slicer": {
+      "Equipments": "CU0551,CU0646,CU0665,CU0454,CU0481,CU0567,CU0722"
+    },
+    "NiAu": {
+      "Equipments": "PL0088"
+    },
+    "uPOL-DB": {
+      "Equipments": "SM0006,SM0014,SM0054,,SM0053"
+    },
+    "uPOL-TP": {
+      "Equipments": "TP1660,TP1661,TP1662,TP1663,TP1664,TP1793,TP1796,TP1797,TP1872,TP1873,TP1874,TP2007,TP2006,TP0873,TP2174,TP2175,TP2223,TP2224"
+    },
+    "uBMU-DB": {
+      "Equipments": "SM0049,VC0165"
+    },
+    "De-Flux": {
+      "Equipments": "DL0018"
+    },
+    "Molding": {
+      "Equipments": "MH0986"
+    },
+    "Laser Marking": {
+      "Equipments": "MK0094"
+    },
+    "uBMU-TP": {
+      "Equipments": "TP2136,TP2137"
+    }
+  },
+  "Non-Common": {
+    "uPOL": {
+      "Equipments": "PL0088,TP2137,SM0006,SM0014,SM0054,SM0053,TP1660,TP1661,TP1662,TP1663,TP1664,TP1793,TP1796,TP1797,TP1872,TP1873,TP1874,TP2007,TP2006,TP0873,TP2174,TP2175,TP2223,TP2224"
+
+    },
+    "uBMU": {
+      "Equipments":"SM0049,VC0165,DL0018,MH0986,MK0094,TP2136,TP2137"
+    }
+  }
+}
