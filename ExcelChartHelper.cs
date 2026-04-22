@@ -6,6 +6,7 @@ using NPOI.SS.Util;
 using NPOI.XSSF.UserModel;
 using NPOI.OpenXmlFormats.Dml.Chart;
 using NPOI.OpenXmlFormats.Dml;
+using System;
 using System.Collections.Generic;
 
 namespace DailyReportTool
@@ -120,6 +121,107 @@ namespace DailyReportTool
             return $"'{sheetName}'!${colLetter}${startRow + 1}:${colLetter}${endRow + 1}";
         }
 
-        public static void CreateCapacityBalanceChart(ISheet sheet, string dataSheetName, int dataCount, string title, double yMax) { }
+
+        public static void CreateCapacityBalanceChart(ISheet sheet, string dataSheetName, int dataCount, string chartTitle, double yMax)
+        {
+            if (dataCount == 0) return;
+            // CRITICAL: Draw anchor in a safe area
+            XSSFDrawing drawing = (XSSFDrawing)sheet.CreateDrawingPatriarch();
+            IClientAnchor anchor = drawing.CreateAnchor(0, 0, 0, 0, 0, 0, 15, 18);
+            IChart chart = drawing.CreateChart(anchor);
+            chart.SetTitle(chartTitle);
+
+            if (chart is XSSFChart xssfChart)
+            {
+                CT_Chart ctChart = xssfChart.GetCTChart();
+                CT_PlotArea ctPlotArea = ctChart.plotArea;
+                uint cId = 3001; uint vId = 3002;
+
+                // 1. Stacked Bar Chart
+                CT_BarChart bc = ctPlotArea.AddNewBarChart();
+                bc.grouping = new CT_BarGrouping { val = ST_BarGrouping.stacked };
+                bc.barDir = new CT_BarDir { val = ST_BarDir.col };
+                bc.overlap = new CT_Overlap { val = 100 };
+                bc.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = cId }, new CT_UnsignedInt { val = vId } };
+
+                string catR = $"'{dataSheetName}'!$B$21:${GetExcelColumnName(dataCount + 1)}$21";
+                AddSer_Bar(bc, 0, "有效產能", catR, $"'{dataSheetName}'!$B$23:${GetExcelColumnName(dataCount + 1)}$23", "C0C0C0");
+                AddSer_Bar(bc, 1, "產速損失", catR, $"'{dataSheetName}'!$B$25:${GetExcelColumnName(dataCount + 1)}$25", "FFFF00");
+                AddSer_Bar(bc, 2, "機故損失", catR, $"'{dataSheetName}'!$B$24:${GetExcelColumnName(dataCount + 1)}$24", "FF0000");
+
+                // 2. Line Chart (Target)
+                CT_LineChart lc = ctPlotArea.AddNewLineChart();
+                lc.grouping = new CT_Grouping { val = ST_Grouping.standard };
+                lc.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = cId }, new CT_UnsignedInt { val = vId } };
+                AddSer_Line(lc, 3, "目標產能", catR, $"'{dataSheetName}'!$B$22:${GetExcelColumnName(dataCount + 1)}$22", "00B0F0", true);
+
+                // 3. Category Axis
+                CT_CatAx catAx = ctPlotArea.AddNewCatAx();
+                catAx.axId = new CT_UnsignedInt { val = cId };
+                catAx.scaling = new CT_Scaling { orientation = new CT_Orientation { val = ST_Orientation.minMax } };
+                catAx.delete = new CT_Boolean { val = 0 };
+                catAx.axPos = new CT_AxPos { val = ST_AxPos.b };
+                catAx.crossAx = new CT_UnsignedInt { val = vId };
+                catAx.tickLblPos = new CT_TickLblPos { val = ST_TickLblPos.nextTo };
+
+                // 4. Value Axis
+                CT_ValAx valAx = ctPlotArea.AddNewValAx();
+                valAx.axId = new CT_UnsignedInt { val = vId };
+                valAx.scaling = new CT_Scaling();
+                valAx.scaling.orientation = new CT_Orientation { val = ST_Orientation.minMax };
+                valAx.scaling.max = new CT_Double { val = yMax };
+                valAx.scaling.min = new CT_Double { val = 0.000001 };
+                valAx.delete = new CT_Boolean { val = 0 };
+                valAx.axPos = new CT_AxPos { val = ST_AxPos.l };
+                valAx.crossAx = new CT_UnsignedInt { val = cId };
+                valAx.majorGridlines = new CT_ChartLines();
+                valAx.numFmt = new CT_NumFmt { formatCode = "#,##0", sourceLinked = false };
+
+                // Legend
+                CT_Legend legend = ctChart.AddNewLegend();
+                legend.legendPos = new CT_LegendPos { val = ST_LegendPos.b };
+                legend.overlay = new CT_Boolean { val = 0 };
+            }
+        }
+
+        private static void AddSer_Bar(CT_BarChart bc, int idx, string name, string catF, string valF, string rgb)
+        {
+            CT_BarSer s = bc.AddNewSer();
+            s.idx = new CT_UnsignedInt { val = (uint)idx };
+            s.order = new CT_UnsignedInt { val = (uint)idx };
+            s.tx = new CT_SerTx { v = name };
+            s.cat = new CT_AxDataSource { strRef = new CT_StrRef { f = catF } };
+            s.val = new CT_NumDataSource { numRef = new CT_NumRef { f = valF } };
+            s.spPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_ShapeProperties { 
+                solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = System.Text.Encoding.ASCII.GetBytes(rgb) } } 
+            };
+            s.dLbls = new CT_DLbls { showVal = new CT_Boolean { val = 1 }, dLblPos = new CT_DLblPos { val = ST_DLblPos.ctr } };
+        }
+
+        private static void AddSer_Line(CT_LineChart lc, int idx, string name, string catF, string valF, string rgb, bool isDash)
+        {
+            CT_LineSer s = lc.AddNewSer();
+            s.idx = new CT_UnsignedInt { val = (uint)idx };
+            s.order = new CT_UnsignedInt { val = (uint)idx };
+            s.tx = new CT_SerTx { v = name };
+            s.cat = new CT_AxDataSource { strRef = new CT_StrRef { f = catF } };
+            s.val = new CT_NumDataSource { numRef = new CT_NumRef { f = valF } };
+            
+            CT_LineProperties ln = new CT_LineProperties { 
+                solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = System.Text.Encoding.ASCII.GetBytes(rgb) } } 
+            };
+            if (isDash) ln.prstDash = new CT_PresetLineDashProperties { val = ST_PresetLineDashVal.dash };
+            
+            s.spPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_ShapeProperties { ln = ln };
+            s.marker = new CT_Marker { symbol = new CT_MarkerStyle { val = ST_MarkerStyle.none } };
+            s.smooth = new CT_Boolean { val = 0 };
+        }
+
+        private static string GetExcelColumnName(int n)
+        {
+            int d = n; string c = "";
+            while (d > 0) { int m = (d - 1) % 26; c = Convert.ToChar(65 + m) + c; d = (d - m) / 26; }
+            return c;
+        }
     }
 }
