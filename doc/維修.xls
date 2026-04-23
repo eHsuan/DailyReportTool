@@ -1,0 +1,77 @@
+<meta http-equiv=Content-Type content=text/html;charset=UTF-8><div>
+	<table class="tb" cellspacing="0" rules="all" border="1" id="GridView1" style="font-size:10pt;border-collapse:collapse;">
+		<tr class="gv_head">
+			<th scope="col">&nbsp;</th><th scope="col">維護ID</th><th scope="col">設備編號</th><th scope="col">設備名稱</th><th scope="col">規格</th><th scope="col">型號</th><th scope="col">維護類別</th><th scope="col">維護開始</th><th scope="col">維護結束</th><th scope="col">維護時數</th><th scope="col">異常描述</th><th scope="col">原因描述</th><th scope="col">處置描述</th><th scope="col">工單號碼</th><th scope="col">需首件檢查</th><th scope="col">產品外觀確認</th><th scope="col">首件檢查備註</th><th scope="col">使用備件</th><th scope="col">備註</th><th scope="col">啟用</th><th scope="col">審核完成</th><th scope="col">審核人員</th><th scope="col">審核日期</th><th scope="col">審核備註</th><th scope="col">設備主分類</th><th scope="col">設備群組</th><th scope="col">資產位置</th><th scope="col">建立人員</th><th scope="col">建立日期</th><th scope="col">修改人員</th><th scope="col">修改日期</th>
+		</tr><tr class="gv_row">
+			<td><input type="image" src="../image/edit/query.gif" onclick="javascript:__doPostBack(&#39;GridView1&#39;,&#39;Select$0&#39;);return false;" style="border-width:0px;" /></td><td>
+                                    <span id="GridView1_ctl02_blabMaintainID">66483</span>
+                                </td><td>
+                                    <span id="GridView1_ctl02_blblMachNo">DL0017</span>
+                                </td><td align="left">UP-DL-02-馗鼎-水平式-CF4-#1</td><td align="left">CF4 Plasma</td><td align="left">&nbsp;</td><td>A-維修</td><td>2026/04/22 08:30:53</td><td>2026/04/22 10:50:10</td><td>2.33</td><td style="width:150px;">機台異常</td><td style="width:150px;">真空異常</td><td style="width:150px;">更換鋁電擊冷水注入孔座,重設定POWER,空打測試OK</td><td>&nbsp;</td><td>N</td><td>N</td><td>&nbsp;</td><td style="width:150px;">&nbsp;</td><td align="left" style="width:150px;">&nbsp;</td><td>Y</td><td>
+                                    <span id="GridView1_ctl02_blabIsApproved">N</span>
+                                </td><td>&nbsp;</td><td>&nbsp;</td><td style="width:100px;">&nbsp;</td><td>
+                                    <span id="GridView1_ctl02_blblClassCode">DL</span>
+                                </td><td align="left">UP_增層</td><td align="left">TNC01-台南廠區</td><td style="vnd.ms-excel.numberformat:@">505256-徐郁富</td><td>2026/04/22 11:58:35</td><td style="vnd.ms-excel.numberformat:@">505256-徐郁富</td><td>2026/04/22 11:58:35</td>
+		</tr><tr class="gv_alter">
+			<td><input type="image" src="../image/edit/query.gif" onclick="javascript:__doPostBack(&#39;GridView1&#39;,&#39;Select$1&#39;);return false;" style="border-width:0px;" /></td><td>
+                                    <span id="GridView1_ctl03_blabMaintainID">66495</span>
+                                </td><td>
+                                    <span id="GridView1_ctl03_blblMachNo">SM0014</span>
+                                </td><td align="left">UP-SM-03-久元-Die Bond#2</td><td align="left">&nbsp;</td><td align="left">SB-802</td><td>A-維修</td><td>2026/04/22 15:00:00</td><td>2026/04/22 16:00:00</td><td>1.00</td><td style="width:150px;">機台異常</td><td style="width:150px;">馬達線路熔斷</td><td style="width:150px;">重新接線,確認OK</td><td>&nbsp;</td><td>N</td><td>N</td><td>&nbsp;</td><td style="width:150px;">&nbsp;</td><td align="left" style="width:150px;">&nbsp;</td><td>Y</td><td>
+                                    <span id="GridView1_ctl03_blabIsApproved">N</span>
+                                </td><td>&nbsp;</td><td>&nbsp;</td><td style="width:100px;">&nbsp;</td><td>
+                                    <span id="GridView1_ctl03_blblClassCode">SM</span>
+                                </td><td align="left">UP_DB</td><td align="left">TNC01-台南廠區</td><td style="vnd.ms-excel.numberformat:@">505256-徐郁富</td><td>2026/04/22 18:19:17</td><td style="vnd.ms-excel.numberformat:@">791823-林英賢</td><td>2026/04/22 20:05:29</td>
+		</tr><tr class="gv_row">
+			<td><input type="image" src="../image/edit/query.gif" onclick="javascript:__doPostBack(&#39;GridView1&#39;,&#39;Select$2&#39;);return false;" style="border-width:0px;" /></td><td>
+                                    <span id="GridView1_ctl04_blabMaintainID">66496</span>
+                                </td><td>
+                                    <span id="GridView1_ctl04_blblMachNo">AC2078</span>
+                                </td><td align="left">UP-AC-11-乾坤-營錡顯影機收板機</td><td align="left">&nbsp;</td><td align="left">CT22-F12-0003A</td><td>A-維修</td><td>2026/04/22 19:00:58</td><td>2026/04/22 20:03:57</td><td>1.05</td><td style="width:150px;">機台異常</td><td style="width:150px;">RB原點復歸異常</td><td style="width:150px;">處理中</td><td>&nbsp;</td><td>N</td><td>N</td><td>&nbsp;</td><td style="width:150px;">&nbsp;</td><td align="left" style="width:150px;">&nbsp;</td><td>Y</td><td>
+                                    <span id="GridView1_ctl04_blabIsApproved">N</span>
+                                </td><td>&nbsp;</td><td>&nbsp;</td><td style="width:100px;">&nbsp;</td><td>
+                                    <span id="GridView1_ctl04_blblClassCode">AC</span>
+                                </td><td align="left">UP_微影</td><td align="left">TNC01-台南廠區</td><td style="vnd.ms-excel.numberformat:@">791823-林英賢</td><td>2026/04/22 20:04:28</td><td style="vnd.ms-excel.numberformat:@">791823-林英賢</td><td>2026/04/22 20:04:28</td>
+		</tr><tr class="gv_alter">
+			<td><input type="image" src="../image/edit/query.gif" onclick="javascript:__doPostBack(&#39;GridView1&#39;,&#39;Select$3&#39;);return false;" style="border-width:0px;" /></td><td>
+                                    <span id="GridView1_ctl05_blabMaintainID">66497</span>
+                                </td><td>
+                                    <span id="GridView1_ctl05_blblMachNo">SM0053</span>
+                                </td><td align="left">UP-SM-05-久元-Die Bond#3</td><td align="left">&nbsp;</td><td align="left">SB-802</td><td>A-維修</td><td>2026/04/22 10:50:41</td><td>2026/04/22 15:30:40</td><td>4.67</td><td style="width:150px;">機台異常</td><td style="width:150px;">AD Flow PCB 故障</td><td style="width:150px;">更換PCB板</td><td>&nbsp;</td><td>N</td><td>N</td><td>&nbsp;</td><td style="width:150px;">&nbsp;</td><td align="left" style="width:150px;">&nbsp;</td><td>Y</td><td>
+                                    <span id="GridView1_ctl05_blabIsApproved">N</span>
+                                </td><td>&nbsp;</td><td>&nbsp;</td><td style="width:100px;">&nbsp;</td><td>
+                                    <span id="GridView1_ctl05_blblClassCode">SM</span>
+                                </td><td align="left">UP_DB</td><td align="left">TNC01-台南廠區</td><td style="vnd.ms-excel.numberformat:@">791823-林英賢</td><td>2026/04/22 20:07:35</td><td style="vnd.ms-excel.numberformat:@">791823-林英賢</td><td>2026/04/22 20:07:35</td>
+		</tr><tr class="gv_row">
+			<td><input type="image" src="../image/edit/query.gif" onclick="javascript:__doPostBack(&#39;GridView1&#39;,&#39;Select$4&#39;);return false;" style="border-width:0px;" /></td><td>
+                                    <span id="GridView1_ctl06_blabMaintainID">66498</span>
+                                </td><td>
+                                    <span id="GridView1_ctl06_blblMachNo">ET0026</span>
+                                </td><td align="left">UP-ET-04-宇泰和-天車-鎳鉻蝕刻-#2</td><td align="left">天車</td><td align="left">&nbsp;</td><td>A-維修</td><td>2026/04/22 10:00:07</td><td>2026/04/22 11:00:06</td><td>1.00</td><td style="width:150px;">機台異常</td><td style="width:150px;">搖擺氣缸不順，原點位置錯誤</td><td style="width:150px;">調整氣管接頭位置、調整氣壓大小，測試後OK</td><td>&nbsp;</td><td>N</td><td>N</td><td>&nbsp;</td><td style="width:150px;">&nbsp;</td><td align="left" style="width:150px;">&nbsp;</td><td>Y</td><td>
+                                    <span id="GridView1_ctl06_blabIsApproved">N</span>
+                                </td><td>&nbsp;</td><td>&nbsp;</td><td style="width:100px;">&nbsp;</td><td>
+                                    <span id="GridView1_ctl06_blblClassCode">ET</span>
+                                </td><td align="left">UP_電鍍</td><td align="left">TNC01-台南廠區</td><td style="vnd.ms-excel.numberformat:@">791823-林英賢</td><td>2026/04/22 20:09:57</td><td style="vnd.ms-excel.numberformat:@">791823-林英賢</td><td>2026/04/22 20:09:57</td>
+		</tr><tr class="gv_alter">
+			<td><input type="image" src="../image/edit/query.gif" onclick="javascript:__doPostBack(&#39;GridView1&#39;,&#39;Select$5&#39;);return false;" style="border-width:0px;" /></td><td>
+                                    <span id="GridView1_ctl07_blabMaintainID">66511</span>
+                                </td><td>
+                                    <span id="GridView1_ctl07_blblMachNo">CU0454</span>
+                                </td><td align="left">UP-CU-01-ADT-&#216;12&quot;_4吋刀-#1</td><td align="left">全自動_單軸_&#216;12&quot;_2吋刀</td><td align="left">ADT_7203</td><td>A-維修</td><td>2026/04/23 03:44:55</td><td>2026/04/23 04:25:00</td><td>0.68</td><td style="width:150px;">機台異常</td><td style="width:150px;">進水管路破裂漏水</td><td style="width:150px;">進水管路更換</td><td>&nbsp;</td><td>N</td><td>N</td><td>&nbsp;</td><td style="width:150px;">&nbsp;</td><td align="left" style="width:150px;">&nbsp;</td><td>Y</td><td>
+                                    <span id="GridView1_ctl07_blabIsApproved">N</span>
+                                </td><td>&nbsp;</td><td>&nbsp;</td><td style="width:100px;">&nbsp;</td><td>
+                                    <span id="GridView1_ctl07_blblClassCode">CU</span>
+                                </td><td align="left">UP_切割</td><td align="left">TNC01-台南廠區</td><td style="vnd.ms-excel.numberformat:@">761802-沈詠宸</td><td>2026/04/23 05:47:15</td><td style="vnd.ms-excel.numberformat:@">761802-沈詠宸</td><td>2026/04/23 05:47:15</td>
+		</tr><tr class="gv_row">
+			<td><input type="image" src="../image/edit/query.gif" onclick="javascript:__doPostBack(&#39;GridView1&#39;,&#39;Select$6&#39;);return false;" style="border-width:0px;" /></td><td>
+                                    <span id="GridView1_ctl08_blabMaintainID">66512</span>
+                                </td><td>
+                                    <span id="GridView1_ctl08_blblMachNo">AC2078</span>
+                                </td><td align="left">UP-AC-11-乾坤-營錡顯影機收板機</td><td align="left">&nbsp;</td><td align="left">CT22-F12-0003A</td><td>A-維修</td><td>2026/04/22 20:00:00</td><td>2026/04/23 08:00:00</td><td>12.00</td><td style="width:150px;">機台異常</td><td style="width:150px;">拍板原點點位異常</td><td style="width:150px;">將原點點位調整回來，但因有撞機導致手臂機構偏差，待更改手臂點位</td><td>&nbsp;</td><td>N</td><td>N</td><td>&nbsp;</td><td style="width:150px;">&nbsp;</td><td align="left" style="width:150px;">&nbsp;</td><td>Y</td><td>
+                                    <span id="GridView1_ctl08_blabIsApproved">N</span>
+                                </td><td>&nbsp;</td><td>&nbsp;</td><td style="width:100px;">&nbsp;</td><td>
+                                    <span id="GridView1_ctl08_blblClassCode">AC</span>
+                                </td><td align="left">UP_微影</td><td align="left">TNC01-台南廠區</td><td style="vnd.ms-excel.numberformat:@">761802-沈詠宸</td><td>2026/04/23 07:02:16</td><td style="vnd.ms-excel.numberformat:@">761802-沈詠宸</td><td>2026/04/23 07:02:16</td>
+		</tr>
+	</table>
+</div>

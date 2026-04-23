@@ -16,13 +16,10 @@ namespace DailyReportTool
         public static void CreateParetoChart(ISheet sheet, string dataSheetName, int dataCount, string title, double maxVal)
         {
             if (dataCount == 0) return;
-
-            // Ensure maxVal is at least a small positive number to avoid Excel errors
             if (maxVal <= 0) maxVal = 1.0;
 
             XSSFDrawing drawing = (XSSFDrawing)sheet.CreateDrawingPatriarch();
             IClientAnchor anchor = drawing.CreateAnchor(0, 0, 0, 0, 0, 0, 10, 20);
-
             IChart chart = drawing.CreateChart(anchor);
             chart.SetTitle(title);
 
@@ -36,7 +33,6 @@ namespace DailyReportTool
                 if (ctPlotArea.valAx == null) ctPlotArea.valAx = new List<CT_ValAx>();
                 if (ctPlotArea.catAx == null) ctPlotArea.catAx = new List<CT_CatAx>();
 
-                // Manual Layout
                 if (ctPlotArea.layout == null) ctPlotArea.layout = new CT_Layout();
                 ctPlotArea.layout.manualLayout = new CT_ManualLayout();
                 ctPlotArea.layout.manualLayout.xMode = new CT_LayoutMode { val = ST_LayoutMode.edge };
@@ -46,11 +42,8 @@ namespace DailyReportTool
                 ctPlotArea.layout.manualLayout.w = new CT_Double { val = 0.85 };
                 ctPlotArea.layout.manualLayout.h = new CT_Double { val = 0.75 };
 
-                uint catAxId = 1001;
-                uint valAxId1 = 1002;
-                uint valAxId2 = 1003;
+                uint catAxId = 1001; uint valAxId1 = 1002; uint valAxId2 = 1003;
 
-                // 1. Category Axis
                 CT_CatAx catAx = new CT_CatAx { axId = new CT_UnsignedInt { val = catAxId } };
                 catAx.scaling = new CT_Scaling { orientation = new CT_Orientation { val = ST_Orientation.minMax } };
                 catAx.delete = new CT_Boolean { val = 0 };
@@ -60,58 +53,38 @@ namespace DailyReportTool
                 catAx.crossAx = new CT_UnsignedInt { val = valAxId1 };
                 ctPlotArea.catAx.Add(catAx);
 
-                // 2. Primary Value Axis (Left - Hours)
                 CT_ValAx valAx1 = new CT_ValAx { axId = new CT_UnsignedInt { val = valAxId1 } };
-                valAx1.scaling = new CT_Scaling();
-                valAx1.scaling.orientation = new CT_Orientation { val = ST_Orientation.minMax };
-                valAx1.scaling.min = new CT_Double { val = 0.000001 }; // Force fixed minimum 0
-                valAx1.scaling.max = new CT_Double { val = maxVal };
+                valAx1.scaling = new CT_Scaling { orientation = new CT_Orientation { val = ST_Orientation.minMax }, min = new CT_Double { val = 0.0 }, max = new CT_Double { val = maxVal } };
                 valAx1.delete = new CT_Boolean { val = 0 };
                 valAx1.axPos = new CT_AxPos { val = ST_AxPos.l };
                 valAx1.crossAx = new CT_UnsignedInt { val = catAxId };
                 valAx1.crosses = new CT_Crosses { val = ST_Crosses.autoZero };
-                valAx1.numFmt = new CT_NumFmt { formatCode = "#,##0.00", sourceLinked = false };
+                valAx1.numFmt = new CT_NumFmt { formatCode = "#,##0", sourceLinked = false };
                 valAx1.majorGridlines = new CT_ChartLines();
                 valAx1.majorTickMark = new CT_TickMark { val = ST_TickMark.@out };
                 ctPlotArea.valAx.Add(valAx1);
 
-                // 3. Secondary Value Axis (Right - Percentage)
                 CT_ValAx valAx2 = new CT_ValAx { axId = new CT_UnsignedInt { val = valAxId2 } };
-                valAx2.scaling = new CT_Scaling();
-                valAx2.scaling.orientation = new CT_Orientation { val = ST_Orientation.minMax };
-                valAx2.scaling.min = new CT_Double { val = 0.000001 }; // Force fixed minimum 0
-                valAx2.scaling.max = new CT_Double { val = 1.0 }; // Force fixed maximum 100%
+                valAx2.scaling = new CT_Scaling { orientation = new CT_Orientation { val = ST_Orientation.minMax }, min = new CT_Double { val = 0.0 }, max = new CT_Double { val = 1.0 } };
                 valAx2.delete = new CT_Boolean { val = 0 };
                 valAx2.axPos = new CT_AxPos { val = ST_AxPos.r };
                 valAx2.crossAx = new CT_UnsignedInt { val = catAxId };
-                valAx2.crosses = new CT_Crosses { val = ST_Crosses.max }; // Force axis to right
+                valAx2.crosses = new CT_Crosses { val = ST_Crosses.max };
                 valAx2.numFmt = new CT_NumFmt { formatCode = "0%", sourceLinked = false };
                 valAx2.tickLblPos = new CT_TickLblPos { val = ST_TickLblPos.nextTo };
                 valAx2.majorTickMark = new CT_TickMark { val = ST_TickMark.@out };
                 ctPlotArea.valAx.Add(valAx2);
 
-                // 4. Bar Chart
-                CT_BarChart barChart = new CT_BarChart();
-                barChart.barDir = new CT_BarDir { val = ST_BarDir.col };
-                barChart.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = catAxId }, new CT_UnsignedInt { val = valAxId1 } };
-                CT_BarSer barSer = barChart.AddNewSer();
-                barSer.idx = new CT_UnsignedInt { val = 0 };
-                barSer.order = new CT_UnsignedInt { val = 0 };
-                barSer.tx = new CT_SerTx { v = "當機時數(小時)" };
-                barSer.cat = new CT_AxDataSource { strRef = new CT_StrRef { f = GetRangeString(dataSheetName, 0, 1, dataCount) } };
-                barSer.val = new CT_NumDataSource { numRef = new CT_NumRef { f = GetRangeString(dataSheetName, 1, 1, dataCount) } };
-                ctPlotArea.barChart.Add(barChart);
+                CT_BarChart bc = new CT_BarChart();
+                bc.barDir = new CT_BarDir { val = ST_BarDir.col };
+                bc.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = catAxId }, new CT_UnsignedInt { val = valAxId1 } };
+                AddSer_Bar(bc, 0, "當機時數(小時)", GetRangeString(dataSheetName, 0, 1, dataCount), GetRangeString(dataSheetName, 1, 1, dataCount), "0F9ED5", true, "000000");
+                ctPlotArea.barChart.Add(bc);
 
-                // 5. Line Chart
-                CT_LineChart lineChart = new CT_LineChart();
-                lineChart.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = catAxId }, new CT_UnsignedInt { val = valAxId2 } };
-                CT_LineSer lineSer = lineChart.AddNewSer();
-                lineSer.idx = new CT_UnsignedInt { val = 1 };
-                lineSer.order = new CT_UnsignedInt { val = 1 };
-                lineSer.tx = new CT_SerTx { v = "累積百分比" };
-                lineSer.cat = new CT_AxDataSource { strRef = new CT_StrRef { f = GetRangeString(dataSheetName, 0, 1, dataCount) } };
-                lineSer.val = new CT_NumDataSource { numRef = new CT_NumRef { f = GetRangeString(dataSheetName, 2, 1, dataCount) } };
-                ctPlotArea.lineChart.Add(lineChart);
+                CT_LineChart lc = new CT_LineChart();
+                lc.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = catAxId }, new CT_UnsignedInt { val = valAxId2 } };
+                AddSer_Line(lc, 1, "累積百分比", GetRangeString(dataSheetName, 0, 1, dataCount), GetRangeString(dataSheetName, 2, 1, dataCount), "000000", false, true, "000000");
+                ctPlotArea.lineChart.Add(lc);
             }
         }
 
@@ -141,7 +114,6 @@ namespace DailyReportTool
                 if (ctPlotArea.valAx == null) ctPlotArea.valAx = new List<CT_ValAx>();
                 if (ctPlotArea.catAx == null) ctPlotArea.catAx = new List<CT_CatAx>();
 
-                // Manual Layout
                 if (ctPlotArea.layout == null) ctPlotArea.layout = new CT_Layout();
                 ctPlotArea.layout.manualLayout = new CT_ManualLayout();
                 ctPlotArea.layout.manualLayout.xMode = new CT_LayoutMode { val = ST_LayoutMode.edge };
@@ -153,7 +125,6 @@ namespace DailyReportTool
 
                 uint catId = 4001; uint valId = 4002;
 
-                // 1. Category Axis
                 CT_CatAx catAx = new CT_CatAx { axId = new CT_UnsignedInt { val = catId } };
                 catAx.scaling = new CT_Scaling { orientation = new CT_Orientation { val = ST_Orientation.minMax } };
                 catAx.delete = new CT_Boolean { val = 0 };
@@ -163,12 +134,8 @@ namespace DailyReportTool
                 catAx.crossAx = new CT_UnsignedInt { val = valId };
                 ctPlotArea.catAx.Add(catAx);
 
-                // 2. Value Axis
                 CT_ValAx valAx = new CT_ValAx { axId = new CT_UnsignedInt { val = valId } };
-                valAx.scaling = new CT_Scaling();
-                valAx.scaling.orientation = new CT_Orientation { val = ST_Orientation.minMax };
-                valAx.scaling.min = new CT_Double { val = 0.000000000001 };
-                valAx.scaling.max = new CT_Double { val = yMax };
+                valAx.scaling = new CT_Scaling { orientation = new CT_Orientation { val = ST_Orientation.minMax }, min = new CT_Double { val = 0.0 }, max = new CT_Double { val = yMax } };
                 valAx.delete = new CT_Boolean { val = 0 };
                 valAx.axPos = new CT_AxPos { val = ST_AxPos.l };
                 valAx.crossAx = new CT_UnsignedInt { val = catId };
@@ -177,7 +144,6 @@ namespace DailyReportTool
                 valAx.numFmt = new CT_NumFmt { formatCode = "#,##0", sourceLinked = false };
                 ctPlotArea.valAx.Add(valAx);
 
-                // 3. Bar Chart
                 CT_BarChart bc = new CT_BarChart();
                 bc.grouping = new CT_BarGrouping { val = ST_BarGrouping.stacked };
                 bc.barDir = new CT_BarDir { val = ST_BarDir.col };
@@ -185,19 +151,17 @@ namespace DailyReportTool
                 bc.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = catId }, new CT_UnsignedInt { val = valId } };
                 
                 string cR = $"'{dataSheetName}'!$B$21:${GetExcelColumnName(dataCount + 1)}$21";
-                AddSer_Bar(bc, 0, "設備產能", cR, $"'{dataSheetName}'!$B$23:${GetExcelColumnName(dataCount + 1)}$23", "C0C0C0", true, "000000");
+                AddSer_Bar(bc, 0, "設備產能", cR, $"'{dataSheetName}'!$B$23:${GetExcelColumnName(dataCount + 1)}$23", "0F9ED5", true, "000000");
                 AddSer_Bar(bc, 1, "產速損失", cR, $"'{dataSheetName}'!$B$25:${GetExcelColumnName(dataCount + 1)}$25", "FFFF00", false, "000000");
-                AddSer_Bar(bc, 2, "機故損失", cR, $"'{dataSheetName}'!$B$24:${GetExcelColumnName(dataCount + 1)}$24", "FF0000", false, "FF0000");
+                AddSer_Bar(bc, 2, "機故損失", cR, $"'{dataSheetName}'!$B$24:${GetExcelColumnName(dataCount + 1)}$24", "FF0000", true, "FF0000");
                 ctPlotArea.barChart.Add(bc);
 
-                // 4. Line Chart
                 CT_LineChart lc = new CT_LineChart();
                 lc.grouping = new CT_Grouping { val = ST_Grouping.standard };
                 lc.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = catId }, new CT_UnsignedInt { val = valId } };
-                AddSer_Line(lc, 3, "目標產能", cR, $"'{dataSheetName}'!$B$22:${GetExcelColumnName(dataCount + 1)}$22", "00B0F0", true);
+                AddSer_Line(lc, 3, "目標產能", cR, $"'{dataSheetName}'!$B$22:${GetExcelColumnName(dataCount + 1)}$22", "00B0F0", true, false, "000000");
                 ctPlotArea.lineChart.Add(lc);
 
-                // 5. Legend
                 if (ctChart.legend == null) ctChart.legend = new CT_Legend();
                 ctChart.legend.legendPos = new CT_LegendPos { val = ST_LegendPos.b };
                 ctChart.legend.overlay = new CT_Boolean { val = 0 };
@@ -212,41 +176,15 @@ namespace DailyReportTool
             s.tx = new CT_SerTx { v = name };
             s.cat = new CT_AxDataSource { strRef = new CT_StrRef { f = catF } };
             s.val = new CT_NumDataSource { numRef = new CT_NumRef { f = valF } };
-            s.spPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_ShapeProperties { 
-                solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = HexToBytes(rgb) } } 
-            };
+            s.spPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_ShapeProperties { solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = HexToBytes(rgb) } } };
             
             if (showLbl) {
-                s.dLbls = new CT_DLbls { 
-                    showVal = new CT_Boolean { val = 1 },
-                    showCatName = new CT_Boolean { val = 0 },
-                    showSerName = new CT_Boolean { val = 0 },
-                    showPercent = new CT_Boolean { val = 0 },
-                    showLegendKey = new CT_Boolean { val = 0 }
-                };
-                
-                s.dLbls.txPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_TextBody {
-                    bodyPr = new NPOI.OpenXmlFormats.Dml.CT_TextBodyProperties(),
-                    lstStyle = new NPOI.OpenXmlFormats.Dml.CT_TextListStyle(),
-                    p = new List<NPOI.OpenXmlFormats.Dml.CT_TextParagraph> {
-                        new NPOI.OpenXmlFormats.Dml.CT_TextParagraph {
-                            pPr = new NPOI.OpenXmlFormats.Dml.CT_TextParagraphProperties {
-                                defRPr = new NPOI.OpenXmlFormats.Dml.CT_TextCharacterProperties {
-                                    sz = 1000, // 10 pt
-                                    solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = HexToBytes(lblColor) } },
-                                    latin = new CT_TextFont { typeface = "Arial" }
-                                }
-                            }
-                        }
-                    }
-                };
-            } else {
-                // 徹底不建立標籤物件，確保隱藏
-                s.dLbls = null;
-            }
+                s.dLbls = new CT_DLbls();
+                SetDataLabels(s.dLbls, lblColor);
+            } else s.dLbls = null;
         }
 
-        private static void AddSer_Line(CT_LineChart lc, int idx, string name, string catF, string valF, string rgb, bool isDash)
+        private static void AddSer_Line(CT_LineChart lc, int idx, string name, string catF, string valF, string rgb, bool isDash, bool showLbl, string lblColor)
         {
             CT_LineSer s = lc.AddNewSer();
             s.idx = new CT_UnsignedInt { val = (uint)idx };
@@ -254,15 +192,39 @@ namespace DailyReportTool
             s.tx = new CT_SerTx { v = name };
             s.cat = new CT_AxDataSource { strRef = new CT_StrRef { f = catF } };
             s.val = new CT_NumDataSource { numRef = new CT_NumRef { f = valF } };
-            
-            CT_LineProperties ln = new CT_LineProperties { 
-                solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = HexToBytes(rgb) } } 
-            };
+            CT_LineProperties ln = new CT_LineProperties { solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = HexToBytes(rgb) } } };
             if (isDash) ln.prstDash = new CT_PresetLineDashProperties { val = ST_PresetLineDashVal.dash };
-            
             s.spPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_ShapeProperties { ln = ln };
             s.marker = new CT_Marker { symbol = new CT_MarkerStyle { val = ST_MarkerStyle.none } };
             s.smooth = new CT_Boolean { val = 0 };
+
+            if (showLbl) {
+                s.dLbls = new CT_DLbls();
+                SetDataLabels(s.dLbls, lblColor);
+            } else s.dLbls = null;
+        }
+
+        private static void SetDataLabels(CT_DLbls dLbls, string lblColor)
+        {
+            dLbls.showVal = new CT_Boolean { val = 1 };
+            dLbls.showCatName = new CT_Boolean { val = 0 };
+            dLbls.showSerName = new CT_Boolean { val = 0 };
+            dLbls.showPercent = new CT_Boolean { val = 0 };
+            dLbls.showLegendKey = new CT_Boolean { val = 0 };
+            dLbls.txPr = new NPOI.OpenXmlFormats.Dml.Chart.CT_TextBody {
+                bodyPr = new CT_TextBodyProperties(),
+                lstStyle = new CT_TextListStyle(),
+                p = new List<CT_TextParagraph> {
+                    new CT_TextParagraph {
+                        pPr = new CT_TextParagraphProperties {
+                            defRPr = new CT_TextCharacterProperties {
+                                sz = 1000, solidFill = new CT_SolidColorFillProperties { srgbClr = new CT_SRgbColor { val = HexToBytes(lblColor) } },
+                                latin = new CT_TextFont { typeface = "Arial" }
+                            }
+                        }
+                    }
+                }
+            };
         }
 
         private static byte[] HexToBytes(string hex)
