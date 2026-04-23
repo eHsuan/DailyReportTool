@@ -23,7 +23,7 @@ namespace DailyReportTool
         public Form1()
         {
             InitializeComponent();
-            this.Text = "DailyReportTool v1.0.1";
+            this.Text = "DailyReportTool v1.1.0";
             LoadConfig();
         }
 
@@ -77,22 +77,39 @@ namespace DailyReportTool
         }
         private void btnSelectConnection_Click(object sender, EventArgs e) {
             using (OpenFileDialog ofd = new OpenFileDialog { Filter = "Excel/HTML|*.xlsx;*.xls;*.html" })
-                if (ofd.ShowDialog() == DialogResult.OK) { txtConnectionPath.Text = ofd.FileName; Log("Selected Conn: " + ofd.FileName); }
+                if (ofd.ShowDialog() == DialogResult.OK) { txtConnectionPath.Text = ofd.FileName; Log("Selected KPI: " + ofd.FileName); }
         }
         private void btnClear_Click(object sender, EventArgs e) { txtMaintenancePath.Clear(); txtConnectionPath.Clear(); Log("Cleared."); }
+        
         private void btnGenerate_Click(object sender, EventArgs e) {
             if (string.IsNullOrEmpty(txtMaintenancePath.Text) && string.IsNullOrEmpty(txtConnectionPath.Text)) return;
             try {
                 Dictionary<string, double> equipHours = new Dictionary<string, double>();
                 if (!string.IsNullOrEmpty(txtMaintenancePath.Text)) ProcessFile(txtMaintenancePath.Text, equipHours, true);
-                if (!string.IsNullOrEmpty(txtConnectionPath.Text)) ProcessFile(txtConnectionPath.Text, equipHours, false);
+                
+                Dictionary<string, double> equipKPI = new Dictionary<string, double>();
+                if (!string.IsNullOrEmpty(txtConnectionPath.Text)) ProcessKPIFile(txtConnectionPath.Text, equipKPI);
+
+                double totalSchedHours = (double)numParetoDataDays.Value * (double)numParetoDailyHours.Value;
+
+                foreach (var kvp in equipKPI) {
+                    double kpiH = kvp.Value * totalSchedHours;
+                    if (!equipHours.ContainsKey(kvp.Key)) equipHours[kvp.Key] = kpiH;
+                    else equipHours[kvp.Key] = Math.Max(equipHours[kvp.Key], kpiH);
+                }
+
+                // 站點統計
                 var stats = new List<Tuple<string, double>>();
                 foreach (var kvp in processMap) {
                     double h = kvp.Value.Where(eq => equipHours.ContainsKey(eq)).Sum(eq => equipHours[eq]);
                     if (h > 0) stats.Add(Tuple.Create(kvp.Key, h));
                 }
                 stats.Sort((a, b) => b.Item2.CompareTo(a.Item2));
-                GenerateParetoReport(stats, equipHours);
+
+                // 單機統計
+                var equipStats = equipHours.Select(x => Tuple.Create(x.Key, x.Value)).OrderByDescending(x => x.Item2).ToList();
+
+                GenerateParetoReport(stats, equipStats, (int)numParetoTopX.Value, (double)numParetoThresholdY.Value, totalSchedHours);
             } catch (Exception ex) { Log("Error: " + ex.Message); }
         }
 
@@ -128,16 +145,32 @@ namespace DailyReportTool
             }
         }
 
-        private void GenerateParetoReport(List<Tuple<string, double>> stats, Dictionary<string, double> h) {
+        private void GenerateParetoReport(List<Tuple<string, double>> stats, List<Tuple<string, double>> equipStats, int topX, double thresholdY, double schedHours) {
             using (SaveFileDialog sfd = new SaveFileDialog { Filter = "Excel|*.xlsx", FileName = $"DailyReport_{DateTime.Now:yyyyMMdd}.xlsx" })
             if (sfd.ShowDialog() == DialogResult.OK) {
                 IWorkbook wb = new XSSFWorkbook();
+                // 1 & 2: 總機故
                 ISheet s1 = wb.CreateSheet("總機故時數"); CreateDataSheet(s1, stats, "製程站點");
                 ISheet s2 = wb.CreateSheet("總機故柏拉圖");
-                double total = stats.Sum(x => x.Item2);
-                ExcelChartHelper.CreateParetoChart(s2, s1.SheetName, stats.Count, "機故柏拉圖", total);
+                ExcelChartHelper.CreateParetoChart(s2, s1.SheetName, stats.Count, "總機故柏拉圖", stats.Sum(x => x.Item2));
+
+                // 3: 單機機故時數 (新 - 含累積百分比)
+                ISheet s3 = wb.CreateSheet("單機機故時數"); CreateDataSheet(s3, equipStats, "設備編號");
+
+                // 4: 單機機故柏拉圖 (新 - 前X大)
+                var topXData = equipStats.Take(topX).ToList();
+                ISheet s4 = wb.CreateSheet($"單機機故柏拉圖(前{topX}大)");
+                CreateDataSheet(s4, topXData, "設備編號"); 
+                ExcelChartHelper.CreateParetoChart(s4, s4.SheetName, topXData.Count, $"單機機故柏拉圖(前{topX}大)", topXData.Sum(x => x.Item2));
+
+                // 6: 單機機故柏拉圖 (新 - Y%以上)
+                var thresholdData = equipStats.Where(x => schedHours > 0 && (x.Item2 / schedHours) * 100 >= thresholdY).ToList();
+                ISheet s5 = wb.CreateSheet($"單機機故柏拉圖({thresholdY}%以上)");
+                CreateDataSheet(s5, thresholdData, "設備編號");
+                ExcelChartHelper.CreateParetoChart(s5, s5.SheetName, thresholdData.Count, $"單機機故柏拉圖({thresholdY}%以上)", thresholdData.Sum(x => x.Item2));
+
                 using (FileStream fs = new FileStream(sfd.FileName, FileMode.Create)) { wb.Write(fs); }
-                Log("Pareto Success.");
+                Log("Report Success.");
             }
         }
 
@@ -151,6 +184,7 @@ namespace DailyReportTool
                 ICell c1 = r.CreateCell(1); c1.SetCellValue(d[i].Item2); c1.CellStyle = hS;
                 cur += d[i].Item2; ICell c2 = r.CreateCell(2); c2.SetCellValue(total == 0 ? 0 : cur / total); c2.CellStyle = pS;
             }
+            s.AutoSizeColumn(0); s.AutoSizeColumn(1); s.AutoSizeColumn(2);
         }
 
         // --- Capacity Balance Logic ---
@@ -189,15 +223,25 @@ namespace DailyReportTool
                     if (!string.IsNullOrEmpty(txtBalanceConnectionPath.Text)) ProcessKPIFile(txtBalanceConnectionPath.Text, equipKPI);
 
                     IWorkbook wb = new XSSFWorkbook();
-                    List<Balance_DataRow> data = Balance_ReadIEData(txtIEPath.Text);
-                    Balance_PerformCalculations(data, (double)numDailyHours.Value, (int)numDataDays.Value, equipHours, equipKPI);
+                    List<Balance_DataRow> allData = Balance_ReadIEData(txtIEPath.Text);
+                    Balance_PerformCalculations(allData, (double)numDailyHours.Value, (int)numDataDays.Value, equipHours, equipKPI);
 
-                    ISheet sData = wb.CreateSheet("平衡圖數據");
-                    Balance_RenderData(sData, data, (int)numDataDays.Value);
+                    // 依類別分組產出 (Common 一定會有一張，其餘依產品數量)
+                    var groups = allData.GroupBy(x => x.Category).OrderBy(g => g.Key == "Common" ? 0 : 1);
 
-                    ISheet sChart = wb.CreateSheet("產能平衡圖");
-                    ExcelChartHelper.CreateCapacityBalanceChart(sChart, sData.SheetName, data.Count, "產能平衡圖", 
-                        data.Max(r => Math.Max(r.TargetPcsPerDay, r.TheoreticalPcsPerDay)) * (int)numDataDays.Value * 1.1);
+                    foreach (var group in groups) {
+                        string catName = group.Key;
+                        var groupData = group.ToList();
+
+                        // 1. Data Sheet
+                        ISheet sData = wb.CreateSheet($"數據({catName})");
+                        Balance_RenderData(sData, groupData, (int)numDataDays.Value);
+
+                        // 2. Chart Sheet
+                        ISheet sChart = wb.CreateSheet($"平衡圖({catName})");
+                        ExcelChartHelper.CreateCapacityBalanceChart(sChart, sData.SheetName, groupData.Count, $"產能平衡圖 - {catName}", 
+                            groupData.Max(r => Math.Max(r.TargetPcsPerDay, r.TheoreticalPcsPerDay)) * (int)numDataDays.Value * 1.1);
+                    }
 
                     using (FileStream fs = new FileStream(sfd.FileName, FileMode.Create)) { wb.Write(fs); }
                     Log("Balance Success!"); MessageBox.Show("Generated Successfully!");
@@ -209,13 +253,12 @@ namespace DailyReportTool
             if (!IsBinaryExcel(path)) {
                 HtmlAgilityPack.HtmlDocument doc = new HtmlAgilityPack.HtmlDocument(); doc.Load(path, true);
                 var trs = doc.DocumentNode.SelectNodes("//tr"); if (trs == null) return;
-                // 從第 2 列 (Index 1) 開始往下 (因為第一行是 Header)
                 foreach (var tr in trs.Skip(1)) {
                     var tds = tr.SelectNodes("td|th"); if (tds == null || tds.Count < 12) continue;
                     string id = System.Net.WebUtility.HtmlDecode(tds[0].InnerText).Trim();
                     if (string.IsNullOrEmpty(id)) continue;
                     string valStr = tds[11].InnerText.Replace("%", "").Replace(",", "").Trim();
-                    if (double.TryParse(valStr, out double d)) { kpiMap[id] = d / 100.0; } // 假設 KPI 欄位是百分比數值 (如 0.14 代表 0.14%)
+                    if (double.TryParse(valStr, out double d)) { kpiMap[id] = d / 100.0; } 
                 }
             } else {
                 using (FileStream fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) {
@@ -223,7 +266,7 @@ namespace DailyReportTool
                     for (int i = 2; i <= ws.LastRowNum; i++) {
                         IRow r = ws.GetRow(i); if (r == null) continue;
                         string id = GetCellValue(r.GetCell(0)).Trim();
-                        if (string.IsNullOrEmpty(id)) continue;
+                        if (string.IsNullOrEmpty(id) || id.Contains("合計") || id.ToUpper().Contains("TOTAL")) continue;
                         double val = 0; ICell cL = r.GetCell(11);
                         if (cL != null) {
                             if (cL.CellType == CellType.Numeric) val = cL.NumericCellValue;
@@ -244,7 +287,15 @@ namespace DailyReportTool
                 for (int r = 14; r <= ws.LastRowNum; r++) {
                     IRow row = ws.GetRow(r); if (row == null || Balance_IsMerged(ws, r, 0)) continue;
                     string n = row.GetCell(0)?.ToString().Trim(); if (string.IsNullOrEmpty(n) || n.Contains("專線") || n.Contains("C/T")) continue;
-                    Balance_DataRow dr = new Balance_DataRow { Name = n, Category = equipCategoryMap.ContainsKey(n) ? equipCategoryMap[n] : "Common" };
+                    
+                    string cat = "Common";
+                    if (equipCategoryMap.ContainsKey(n)) cat = equipCategoryMap[n];
+
+                    // 強制分類規則
+                    if (n.Contains("NiAu") || n.Contains("uPOL-DB") || n.Contains("uPOL-TP")) cat = "uPOL";
+                    else if (n.Contains("De-Flux") || n.Contains("Molding") || n.Contains("Laser Marking") || n.Contains("uBMU-TP") || n.Contains("uBMU-DB")) cat = "uBMU";
+
+                    Balance_DataRow dr = new Balance_DataRow { Name = n, Category = cat };
                     for (int j = 0; j < prodCount; j++) dr.Products.Add(new Balance_ProductInfo { CT = Balance_GetCleanNum(row.GetCell(1+j*4), eval), PcsPerLot = Balance_GetCleanNum(row.GetCell(2+j*4), eval), DailyLotDemand = Balance_GetCleanNum(row.GetCell(3+j*4), eval), PassCount = Balance_GetCleanNum(row.GetCell(4+j*4), eval) });
                     dr.TargetPcsPerDay = Balance_GetCleanNum(row.GetCell(10), eval); // Col K
                     dr.EquipCount = processMap.ContainsKey(n) ? processMap[n].Count : 0;
@@ -255,7 +306,6 @@ namespace DailyReportTool
         }
 
         private void Balance_PerformCalculations(List<Balance_DataRow> rows, double hr, int days, Dictionary<string, double> equipHours, Dictionary<string, double> equipKPI) {
-            double totalProduceTimeHours = hr * days;
             foreach (var r in rows) {
                 double tP = 0, tB = 0, wCT = 0, wP = 0;
                 foreach (var p in r.Products) { double b = p.DailyLotDemand * p.PcsPerLot; tB += b; tP += (b * p.PassCount); wCT += (p.CT * b * p.PassCount); wP += (p.PassCount * b); }
@@ -267,15 +317,15 @@ namespace DailyReportTool
                 if (processMap.ContainsKey(r.Name)) {
                     double siteTotalBreakdownPcs = 0;
                     foreach (var eqId in processMap[r.Name]) {
-                        double maintenanceRatio = 0;
-                        if (equipHours.ContainsKey(eqId) && totalProduceTimeHours > 0) 
-                            maintenanceRatio = equipHours[eqId] / totalProduceTimeHours;
-                        
+                        double maintenancePcs = 0;
+                        if (equipHours.ContainsKey(eqId) && hr > 0) 
+                        {
+                            double eqTheoreticalPcsPerDay = r.TheoreticalPcsPerDay / (r.EquipCount > 0 ? r.EquipCount : 1);
+                            maintenancePcs = (equipHours[eqId] / hr) * eqTheoreticalPcsPerDay;
+                        }
                         double kpiRatio = equipKPI.ContainsKey(eqId) ? equipKPI[eqId] : 0;
-                        double finalRatio = Math.Max(maintenanceRatio, kpiRatio);
-                        
-                        double eqTheoreticalPcsPerDay = r.TheoreticalPcsPerDay / (r.EquipCount > 0 ? r.EquipCount : 1);
-                        siteTotalBreakdownPcs += (finalRatio * eqTheoreticalPcsPerDay);
+                        double kpiPcs = kpiRatio * (r.TheoreticalPcsPerDay / (r.EquipCount > 0 ? r.EquipCount : 1));
+                        siteTotalBreakdownPcs += Math.Max(maintenancePcs, kpiPcs);
                     }
                     r.BreakdownPcsPerDay = siteTotalBreakdownPcs;
                 }
@@ -285,15 +335,13 @@ namespace DailyReportTool
         private void Balance_RenderData(ISheet s, List<Balance_DataRow> rows, int d) {
             string[] heads = { "機台/站別", "目標片次", "設備產能", "機故損失", "產速損失" };
             for (int j = 0; j < 5; j++) s.CreateRow(20 + j).CreateCell(0).SetCellValue(heads[j]);
-            
             double maxTarget = rows.Count > 0 ? rows.Max(r => r.TargetPcsPerDay * d) : 0;
             long roundedMaxTarget = (long)Math.Round(maxTarget);
-
             for (int i = 0; i < rows.Count; i++) {
                 int c = i + 1; s.GetRow(20).CreateCell(c).SetCellValue(rows[i].Name);
                 s.GetRow(21).CreateCell(c).SetCellValue(roundedMaxTarget);
                 s.GetRow(22).CreateCell(c).SetCellValue(Math.Round(rows[i].TheoreticalPcsPerDay * d));
-                s.GetRow(23).CreateCell(c).SetCellValue(Math.Round(rows[i].BreakdownPcsPerDay * d));
+                s.GetRow(23).CreateCell(c).SetCellValue(Math.Round(rows[i].BreakdownPcsPerDay));
                 s.GetRow(24).CreateCell(c).SetCellValue(0);
             }
         }

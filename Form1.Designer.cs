@@ -32,6 +32,14 @@ namespace DailyReportTool
             this.menuPareto = new System.Windows.Forms.ToolStripMenuItem();
             this.menuBalance = new System.Windows.Forms.ToolStripMenuItem();
             this.pnlPareto = new System.Windows.Forms.Panel();
+            this.lblParetoTopX = new System.Windows.Forms.Label();
+            this.numParetoTopX = new System.Windows.Forms.NumericUpDown();
+            this.lblParetoThresholdY = new System.Windows.Forms.Label();
+            this.numParetoThresholdY = new System.Windows.Forms.NumericUpDown();
+            this.lblParetoDailyHours = new System.Windows.Forms.Label();
+            this.numParetoDailyHours = new System.Windows.Forms.NumericUpDown();
+            this.lblParetoDataDays = new System.Windows.Forms.Label();
+            this.numParetoDataDays = new System.Windows.Forms.NumericUpDown();
             this.label1 = new System.Windows.Forms.Label();
             this.txtMaintenancePath = new System.Windows.Forms.TextBox();
             this.btnSelectMaintenance = new System.Windows.Forms.Button();
@@ -58,6 +66,10 @@ namespace DailyReportTool
             this.txtLog = new System.Windows.Forms.TextBox();
             this.menuStrip1.SuspendLayout();
             this.pnlPareto.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numParetoTopX)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numParetoThresholdY)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numParetoDailyHours)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numParetoDataDays)).BeginInit();
             this.pnlBalance.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numDailyHours)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.numDataDays)).BeginInit();
@@ -77,19 +89,27 @@ namespace DailyReportTool
             // menuPareto
             // 
             this.menuPareto.Name = "menuPareto";
-            this.menuPareto.Size = new System.Drawing.Size(82, 20);
+            this.menuPareto.Size = new System.Drawing.Size(79, 20);
             this.menuPareto.Text = "機故柏拉圖";
             this.menuPareto.Click += new System.EventHandler(this.menuPareto_Click);
             // 
             // menuBalance
             // 
             this.menuBalance.Name = "menuBalance";
-            this.menuBalance.Size = new System.Drawing.Size(82, 20);
+            this.menuBalance.Size = new System.Drawing.Size(79, 20);
             this.menuBalance.Text = "產能平衡圖";
             this.menuBalance.Click += new System.EventHandler(this.menuBalance_Click);
             // 
             // pnlPareto
             // 
+            this.pnlPareto.Controls.Add(this.lblParetoTopX);
+            this.pnlPareto.Controls.Add(this.numParetoTopX);
+            this.pnlPareto.Controls.Add(this.lblParetoThresholdY);
+            this.pnlPareto.Controls.Add(this.numParetoThresholdY);
+            this.pnlPareto.Controls.Add(this.lblParetoDailyHours);
+            this.pnlPareto.Controls.Add(this.numParetoDailyHours);
+            this.pnlPareto.Controls.Add(this.lblParetoDataDays);
+            this.pnlPareto.Controls.Add(this.numParetoDataDays);
             this.pnlPareto.Controls.Add(this.label1);
             this.pnlPareto.Controls.Add(this.txtMaintenancePath);
             this.pnlPareto.Controls.Add(this.btnSelectMaintenance);
@@ -100,8 +120,112 @@ namespace DailyReportTool
             this.pnlPareto.Controls.Add(this.btnClear);
             this.pnlPareto.Location = new System.Drawing.Point(0, 27);
             this.pnlPareto.Name = "pnlPareto";
-            this.pnlPareto.Size = new System.Drawing.Size(600, 115);
+            this.pnlPareto.Size = new System.Drawing.Size(600, 220);
             this.pnlPareto.TabIndex = 1;
+            // 
+            // lblParetoTopX
+            // 
+            this.lblParetoTopX.AutoSize = true;
+            this.lblParetoTopX.Location = new System.Drawing.Point(12, 155);
+            this.lblParetoTopX.Name = "lblParetoTopX";
+            this.lblParetoTopX.Size = new System.Drawing.Size(113, 12);
+            this.lblParetoTopX.TabIndex = 13;
+            this.lblParetoTopX.Text = "顯示單機前幾大資料";
+            // 
+            // numParetoTopX
+            // 
+            this.numParetoTopX.Location = new System.Drawing.Point(131, 153);
+            this.numParetoTopX.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.numParetoTopX.Name = "numParetoTopX";
+            this.numParetoTopX.Size = new System.Drawing.Size(50, 22);
+            this.numParetoTopX.TabIndex = 12;
+            this.numParetoTopX.Value = new decimal(new int[] {
+            10,
+            0,
+            0,
+            0});
+            // 
+            // lblParetoThresholdY
+            // 
+            this.lblParetoThresholdY.AutoSize = true;
+            this.lblParetoThresholdY.Location = new System.Drawing.Point(208, 155);
+            this.lblParetoThresholdY.Name = "lblParetoThresholdY";
+            this.lblParetoThresholdY.Size = new System.Drawing.Size(130, 12);
+            this.lblParetoThresholdY.TabIndex = 15;
+            this.lblParetoThresholdY.Text = "顯示單機機故百分比(%)";
+            // 
+            // numParetoThresholdY
+            // 
+            this.numParetoThresholdY.Location = new System.Drawing.Point(344, 153);
+            this.numParetoThresholdY.Name = "numParetoThresholdY";
+            this.numParetoThresholdY.Size = new System.Drawing.Size(50, 22);
+            this.numParetoThresholdY.TabIndex = 14;
+            this.numParetoThresholdY.Value = new decimal(new int[] {
+            5,
+            0,
+            0,
+            0});
+            // 
+            // lblParetoDailyHours
+            // 
+            this.lblParetoDailyHours.AutoSize = true;
+            this.lblParetoDailyHours.Location = new System.Drawing.Point(180, 120);
+            this.lblParetoDailyHours.Name = "lblParetoDailyHours";
+            this.lblParetoDailyHours.Size = new System.Drawing.Size(77, 12);
+            this.lblParetoDailyHours.TabIndex = 11;
+            this.lblParetoDailyHours.Text = "每日生產時間";
+            // 
+            // numParetoDailyHours
+            // 
+            this.numParetoDailyHours.Location = new System.Drawing.Point(265, 117);
+            this.numParetoDailyHours.Maximum = new decimal(new int[] {
+            24,
+            0,
+            0,
+            0});
+            this.numParetoDailyHours.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.numParetoDailyHours.Name = "numParetoDailyHours";
+            this.numParetoDailyHours.Size = new System.Drawing.Size(60, 22);
+            this.numParetoDailyHours.TabIndex = 10;
+            this.numParetoDailyHours.Value = new decimal(new int[] {
+            20,
+            0,
+            0,
+            0});
+            // 
+            // lblParetoDataDays
+            // 
+            this.lblParetoDataDays.AutoSize = true;
+            this.lblParetoDataDays.Location = new System.Drawing.Point(12, 120);
+            this.lblParetoDataDays.Name = "lblParetoDataDays";
+            this.lblParetoDataDays.Size = new System.Drawing.Size(53, 12);
+            this.lblParetoDataDays.TabIndex = 9;
+            this.lblParetoDataDays.Text = "資料天數";
+            // 
+            // numParetoDataDays
+            // 
+            this.numParetoDataDays.Location = new System.Drawing.Point(95, 117);
+            this.numParetoDataDays.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.numParetoDataDays.Name = "numParetoDataDays";
+            this.numParetoDataDays.Size = new System.Drawing.Size(60, 22);
+            this.numParetoDataDays.TabIndex = 8;
+            this.numParetoDataDays.Value = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
             // 
             // label1
             // 
@@ -135,9 +259,9 @@ namespace DailyReportTool
             this.label2.AutoSize = true;
             this.label2.Location = new System.Drawing.Point(12, 50);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(77, 12);
+            this.label2.Size = new System.Drawing.Size(74, 12);
             this.label2.TabIndex = 3;
-            this.label2.Text = "設備連線資料";
+            this.label2.Text = "KPI 資料檔案";
             // 
             // txtConnectionPath
             // 
@@ -159,7 +283,7 @@ namespace DailyReportTool
             // 
             // btnGenerate
             // 
-            this.btnGenerate.Location = new System.Drawing.Point(95, 85);
+            this.btnGenerate.Location = new System.Drawing.Point(95, 185);
             this.btnGenerate.Name = "btnGenerate";
             this.btnGenerate.Size = new System.Drawing.Size(100, 30);
             this.btnGenerate.TabIndex = 6;
@@ -169,7 +293,7 @@ namespace DailyReportTool
             // 
             // btnClear
             // 
-            this.btnClear.Location = new System.Drawing.Point(210, 85);
+            this.btnClear.Location = new System.Drawing.Point(210, 185);
             this.btnClear.Name = "btnClear";
             this.btnClear.Size = new System.Drawing.Size(100, 30);
             this.btnClear.TabIndex = 7;
@@ -231,7 +355,7 @@ namespace DailyReportTool
             this.labelBalanceC.AutoSize = true;
             this.labelBalanceC.Location = new System.Drawing.Point(12, 85);
             this.labelBalanceC.Name = "labelBalanceC";
-            this.labelBalanceC.Size = new System.Drawing.Size(77, 12);
+            this.labelBalanceC.Size = new System.Drawing.Size(74, 12);
             this.labelBalanceC.TabIndex = 11;
             this.labelBalanceC.Text = "KPI 資料檔案";
             // 
@@ -335,7 +459,7 @@ namespace DailyReportTool
             this.label3.AutoSize = true;
             this.label3.Location = new System.Drawing.Point(12, 15);
             this.label3.Name = "label3";
-            this.label3.Size = new System.Drawing.Size(63, 12);
+            this.label3.Size = new System.Drawing.Size(67, 12);
             this.label3.TabIndex = 1;
             this.label3.Text = "IE 資料檔案";
             // 
@@ -349,7 +473,7 @@ namespace DailyReportTool
             // 
             // txtLog
             // 
-            this.txtLog.Location = new System.Drawing.Point(12, 220);
+            this.txtLog.Location = new System.Drawing.Point(12, 255);
             this.txtLog.Multiline = true;
             this.txtLog.Name = "txtLog";
             this.txtLog.ReadOnly = true;
@@ -361,7 +485,7 @@ namespace DailyReportTool
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(600, 420);
+            this.ClientSize = new System.Drawing.Size(600, 450);
             this.Controls.Add(this.pnlPareto);
             this.Controls.Add(this.pnlBalance);
             this.Controls.Add(this.txtLog);
@@ -373,6 +497,10 @@ namespace DailyReportTool
             this.menuStrip1.PerformLayout();
             this.pnlPareto.ResumeLayout(false);
             this.pnlPareto.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.numParetoTopX)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numParetoThresholdY)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numParetoDailyHours)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.numParetoDataDays)).EndInit();
             this.pnlBalance.ResumeLayout(false);
             this.pnlBalance.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.numDailyHours)).EndInit();
@@ -401,6 +529,10 @@ namespace DailyReportTool
         private System.Windows.Forms.TextBox txtIEPath;
         private System.Windows.Forms.Button btnImportIE;
         private System.Windows.Forms.Button btnGenerateBalance;
+        private System.Windows.Forms.Label lblParetoDataDays;
+        private System.Windows.Forms.NumericUpDown numParetoDataDays;
+        private System.Windows.Forms.Label lblParetoDailyHours;
+        private System.Windows.Forms.NumericUpDown numParetoDailyHours;
         private System.Windows.Forms.Label lblDataDays;
         private System.Windows.Forms.NumericUpDown numDataDays;
         private System.Windows.Forms.Label lblDailyHours;
@@ -412,5 +544,9 @@ namespace DailyReportTool
         private System.Windows.Forms.Label labelBalanceC;
         private System.Windows.Forms.TextBox txtBalanceConnectionPath;
         private System.Windows.Forms.Button btnBalanceSelectConnection;
+        private System.Windows.Forms.Label lblParetoTopX;
+        private System.Windows.Forms.NumericUpDown numParetoTopX;
+        private System.Windows.Forms.Label lblParetoThresholdY;
+        private System.Windows.Forms.NumericUpDown numParetoThresholdY;
     }
 }
