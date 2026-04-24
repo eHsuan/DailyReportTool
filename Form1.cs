@@ -29,7 +29,7 @@ namespace DailyReportTool
         public Form1()
         {
             InitializeComponent();
-            this.Text = "DailyReportTool v1.1.0";
+            this.Text = "DailyReportTool v1.1.1";
             LoadConfig();
         }
 
@@ -177,6 +177,9 @@ namespace DailyReportTool
 
                 using (FileStream fs = new FileStream(sfd.FileName, FileMode.Create)) { wb.Write(fs); }
                 Log("Report Success.");
+                if (MessageBox.Show("報表產出成功，是否直接開啟檔案？", "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes) {
+                    System.Diagnostics.Process.Start(sfd.FileName);
+                }
             }
         }
 
@@ -242,18 +245,22 @@ namespace DailyReportTool
 
                     foreach (var group in groups) {
                         string catName = group.Key;
+                        string displayCatName = catName == "Common" ? "共用設備" : catName;
                         var groupData = group.ToList();
 
                         ISheet sData = wb.CreateSheet($"數據({catName})");
                         Balance_RenderData(sData, groupData, (int)numDataDays.Value);
 
                         ISheet sChart = wb.CreateSheet($"平衡圖({catName})");
-                        ExcelChartHelper.CreateCapacityBalanceChart(sChart, sData.SheetName, groupData.Count, $"產能平衡圖 - {catName}", 
+                        ExcelChartHelper.CreateCapacityBalanceChart(sChart, sData.SheetName, groupData.Count, $"產能平衡圖 - {displayCatName}", 
                             groupData.Max(r => Math.Max(r.TargetPcsPerDay, r.TheoreticalPcsPerDay)) * (int)numDataDays.Value * 1.1);
                     }
 
                     using (FileStream fs = new FileStream(sfd.FileName, FileMode.Create)) { wb.Write(fs); }
-                    Log("Balance Success!"); MessageBox.Show("Generated Successfully!");
+                    Log("Balance Success!");
+                    if (MessageBox.Show("平衡圖產出成功，是否直接開啟檔案？", "確認", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes) {
+                        System.Diagnostics.Process.Start(sfd.FileName);
+                    }
                 }
             } catch (Exception ex) { Log("Balance Error: " + ex.Message); MessageBox.Show("Balance Error: " + ex.Message); }
         }
@@ -302,8 +309,9 @@ namespace DailyReportTool
                     else if (n.Contains("De-Flux") || n.Contains("Molding") || n.Contains("Laser Marking") || n.Contains("uBMU-TP") || n.Contains("uBMU-DB")) cat = "uBMU";
                     Balance_DataRow dr = new Balance_DataRow { Name = n, Category = cat };
                     for (int j = 0; j < prodCount; j++) dr.Products.Add(new Balance_ProductInfo { CT = Balance_GetCleanNum(row.GetCell(1+j*4), eval), PcsPerLot = Balance_GetCleanNum(row.GetCell(2+j*4), eval), DailyLotDemand = Balance_GetCleanNum(row.GetCell(3+j*4), eval), PassCount = Balance_GetCleanNum(row.GetCell(4+j*4), eval) });
+                    dr.WeightedAvgCT = Balance_GetCleanNum(row.GetCell(9), eval); // Col J
                     dr.TargetPcsPerDay = Balance_GetCleanNum(row.GetCell(10), eval); // Col K
-                    dr.EquipCount = processMap.ContainsKey(n) ? processMap[n].Count : 0;
+                    dr.EquipCount = Balance_GetCleanNum(row.GetCell(13), eval); // Col N
                     rows.Add(dr);
                 }
             }
@@ -312,11 +320,20 @@ namespace DailyReportTool
 
         private void Balance_PerformCalculations(List<Balance_DataRow> rows, double hr, int days, Dictionary<string, double> equipHours, Dictionary<string, double> equipKPI) {
             foreach (var r in rows) {
-                double tP = 0, tB = 0, wCT = 0, wP = 0;
-                foreach (var p in r.Products) { double b = p.DailyLotDemand * p.PcsPerLot; tB += b; tP += (b * p.PassCount); wCT += (p.CT * b * p.PassCount); wP += (p.PassCount * b); }
-                r.WeightedAvgCT = (tP > 0) ? (wCT / tP) : 0; r.WeightedAvgPass = (tB > 0) ? (wP / tB) : 1;
+                // 產能計算直接使用從 Excel 讀取的 J 欄 (WeightedAvgCT) 與 N 欄 (EquipCount)
                 double theory = (r.EquipCount * hr * 3600) / (r.WeightedAvgCT > 0 ? r.WeightedAvgCT : 1);
-                r.TheoreticalPcsPerDay = theory / (r.WeightedAvgPass > 0 ? r.WeightedAvgPass : 1);
+                r.TheoreticalPcsPerDay = theory;
+
+                // 仍然計算加權良率，以供機故損失或其他邏輯參考（如果需要）
+                double tP = 0, tB = 0, wP = 0;
+                foreach (var p in r.Products) { 
+                    double b = p.DailyLotDemand * p.PcsPerLot; 
+                    tB += b; 
+                    tP += (b * p.PassCount); 
+                    wP += (p.PassCount * b); 
+                }
+                r.WeightedAvgPass = (tB > 0) ? (wP / tB) : 1;
+
                 if (processMap.ContainsKey(r.Name)) {
                     double siteTotalBreakdownPcs = 0;
                     foreach (var eqId in processMap[r.Name]) {

@@ -151,9 +151,9 @@ namespace DailyReportTool
                 bc.axId = new List<CT_UnsignedInt> { new CT_UnsignedInt { val = catId }, new CT_UnsignedInt { val = valId } };
                 
                 string cR = $"'{dataSheetName}'!$B$21:${GetExcelColumnName(dataCount + 1)}$21";
-                AddSer_Bar(bc, 0, "設備產能", cR, $"'{dataSheetName}'!$B$23:${GetExcelColumnName(dataCount + 1)}$23", "0F9ED5", true, "000000");
-                AddSer_Bar(bc, 1, "產速損失", cR, $"'{dataSheetName}'!$B$25:${GetExcelColumnName(dataCount + 1)}$25", "FFFF00", false, "000000");
-                AddSer_Bar(bc, 2, "機故損失", cR, $"'{dataSheetName}'!$B$24:${GetExcelColumnName(dataCount + 1)}$24", "FF0000", true, "FF0000");
+                AddSer_Bar(bc, 0, "設備產能", cR, $"'{dataSheetName}'!$B$23:${GetExcelColumnName(dataCount + 1)}$23", "0F9ED5", true, "000000", ST_DLblPos.ctr);
+                AddSer_Bar(bc, 1, "產速損失", cR, $"'{dataSheetName}'!$B$25:${GetExcelColumnName(dataCount + 1)}$25", "FFFF00", false, "000000", ST_DLblPos.ctr);
+                AddSer_Bar(bc, 2, "機故損失", cR, $"'{dataSheetName}'!$B$24:${GetExcelColumnName(dataCount + 1)}$24", "FF0000", true, "FF0000", ST_DLblPos.inBase);
                 ctPlotArea.barChart.Add(bc);
 
                 CT_LineChart lc = new CT_LineChart();
@@ -168,7 +168,7 @@ namespace DailyReportTool
             }
         }
 
-        private static void AddSer_Bar(CT_BarChart bc, int idx, string name, string catF, string valF, string rgb, bool showLbl, string lblColor)
+        private static void AddSer_Bar(CT_BarChart bc, int idx, string name, string catF, string valF, string rgb, bool showLbl, string lblColor, ST_DLblPos pos = ST_DLblPos.ctr)
         {
             CT_BarSer s = bc.AddNewSer();
             s.idx = new CT_UnsignedInt { val = (uint)idx };
@@ -180,7 +180,7 @@ namespace DailyReportTool
             
             if (showLbl) {
                 s.dLbls = new CT_DLbls();
-                SetDataLabels(s.dLbls, lblColor);
+                SetDataLabels(s.dLbls, lblColor, pos);
             } else s.dLbls = null;
         }
 
@@ -200,12 +200,13 @@ namespace DailyReportTool
 
             if (showLbl) {
                 s.dLbls = new CT_DLbls();
-                SetDataLabels(s.dLbls, lblColor);
+                SetDataLabels(s.dLbls, lblColor, ST_DLblPos.ctr);
             } else s.dLbls = null;
         }
 
-        private static void SetDataLabels(CT_DLbls dLbls, string lblColor)
+        private static void SetDataLabels(CT_DLbls dLbls, string lblColor, ST_DLblPos pos)
         {
+            dLbls.dLblPos = new CT_DLblPos { val = pos };
             dLbls.showVal = new CT_Boolean { val = 1 };
             dLbls.showCatName = new CT_Boolean { val = 0 };
             dLbls.showSerName = new CT_Boolean { val = 0 };
